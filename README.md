@@ -61,7 +61,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 |---|---|
 | A1 | Operação sem tempo cadastrado |
 | A4 | Item com pintura PU (fase 70) sem acabamento UV (fase 75) |
-| A5 | Hrs Ind. muito fora da mediana da mesma operação no produto (provável erro de digitação) |
+| A5 | Hrs Ind. muito fora da mediana da mesma operação **na mesma máquina** no produto (provável erro de digitação) |
 | A6 | Operação minoritária numa máquina que executa outra operação como padrão (ex.: PINTAR PU numa máquina que só faz PINTAR UV) |
 
 ### Informativo — padronização de cadastro
@@ -69,7 +69,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 | Regra | Verificação |
 |---|---|
 | I2 | Roteiro que não inicia em 010 |
-| I3 | Mesma operação distribuída em máquinas diferentes |
+| I3 | Mesma operação distribuída em máquinas diferentes — só quando as máquinas nunca dividem o mesmo item (máquinas juntas no mesmo item são etapas do processo) |
 
 Além dos achados, a ferramenta soma a **carga por máquina** do produto, que mostra
 onde está concentrado o tempo — não a capacidade disponível.
@@ -115,6 +115,11 @@ de embalagem fica no item de volume (5xx), não no pai. Tempo zerado ali é o ca
 **Observação por passe** — a observação em "Informação p/ OF" descreve **cada operação**,
 não o total. Duas linhas "1 LD ACABAMENTO" significam dois lados, uma operação por lado.
 Por isso não existe regra de operação repetida.
+
+**Pintura PU em etapas** — as operações "PINTAR PU" de um item passam por máquinas
+diferentes da mesma linha (cabines, lixadeira) sob o mesmo nome de operação, com tempos
+legitimamente diferentes. Por isso a A5 compara por operação **e** máquina, e o I3 ignora
+operações cujas máquinas trabalham juntas dentro do mesmo item.
 
 ---
 
