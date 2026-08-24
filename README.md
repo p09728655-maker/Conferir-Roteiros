@@ -60,7 +60,6 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 | Regra | Verificação |
 |---|---|
 | A1 | Operação sem tempo cadastrado |
-| A3 | Nº de funcionários divergente para a mesma máquina entre itens |
 | A4 | Item com pintura PU (fase 70) sem acabamento UV (fase 75) |
 | A5 | Hrs Ind. muito fora da mediana da mesma operação no produto (provável erro de digitação) |
 | A6 | Operação minoritária numa máquina que executa outra operação como padrão (ex.: PINTAR PU numa máquina que só faz PINTAR UV) |
@@ -83,6 +82,9 @@ onde está concentrado o tempo — não a capacidade disponível.
 - **Coerência entre a fase do componente e a fase do roteiro.** Mesmo motivo. É a origem
   de boa parte dos erros reais de cadastro e continua exigindo conferência na tela.
 - **Marcação de fim de fase.** Não consta no relatório.
+- **Nº de funcionários.** A quantidade não tem relevância no cadastro da Patrimar
+  (convenção confirmada em 24/08/2026) — a antiga regra A3 foi removida por isso.
+  O dado continua saindo no CSV.
 - **Se o tempo cadastrado corresponde ao tempo real.** A ferramenta confere consistência
   interna, não realidade de chão de fábrica.
 - **Duplicidade de operação.** Um passe legítimo (um lado por operação) e uma linha
@@ -99,7 +101,6 @@ do ERP evoluir — não é preciso mexer no resto do código.
 const CFG = {
   exigeFase: [ {se:70, entao:75, texto:'...'} ],  // fase que exige outra fase
   tolQtd: 0.05,            // tolerância para considerar a quantidade inteira
-  ignoraFunc: [],          // máquinas isentas da checagem de nº de funcionários
   tempoFora: {fator:8, min:3}, // A5: ≥8× (ou ≤1/8) da mediana da operação, mín. 3 amostras
   opMaquina: {minPadrao:3, fator:3}, // A6: dominante ≥3 ocorrências e ≥3× a minoritária
   prefixoSemTempo: ['1']   // itens cujo tempo zerado é esperado

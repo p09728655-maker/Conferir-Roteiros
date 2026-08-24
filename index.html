@@ -357,7 +357,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
       </div>
       <div class="wp">
         <table class="full">
-          <thead><tr><th>Nr.</th><th>Operação</th><th>Fase</th><th>Máq.</th><th>Func.</th>
+          <thead><tr><th>Nr.</th><th>Operação</th><th>Fase</th><th>Máq.</th>
           <th>Hrs Ind.</th><th>Hrs Total</th><th>Informação p/ OF</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -369,7 +369,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
     <h4>O que ela confere</h4>
     <ul>
       <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1) e fase fora de ordem crescente no roteiro (B2). Impedem a OP de gerar ou o apontamento de fechar.</li>
-      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), nº de funcionários divergente na mesma máquina entre itens (A3), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação (A5) e operação que não bate com o padrão da máquina (A6). Distorcem custo ou carga-máquina.</li>
+      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação (A5) e operação que não bate com o padrão da máquina (A6). Distorcem custo ou carga-máquina.</li>
       <li><b>Informativo</b> — roteiro que não inicia em 010 (I2) e mesma operação distribuída em máquinas diferentes (I3). Padronização de cadastro.</li>
       <li><b>Carga por máquina</b> — soma do tempo do produto por recurso, mostrando onde o tempo está concentrado.</li>
     </ul>
@@ -378,6 +378,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
       <li>Consumo de material, quantidades de estrutura e coerência entre a fase do componente e a fase do roteiro — o relatório de processos não traz esses dados.</li>
       <li>Se o tempo cadastrado corresponde ao tempo real. Ela confere consistência interna, não realidade de chão de fábrica.</li>
       <li>Marcação de fim de fase — não consta neste relatório.</li>
+      <li>Nº de funcionários por operação — a quantidade não tem relevância no cadastro da Patrimar. O dado sai apenas no CSV.</li>
       <li>Duplicidade de operação. Um passe legítimo (um lado por operação, conforme a convenção da Patrimar) e uma linha duplicada por engano ficam idênticos no relatório — não há como separar os dois.</li>
     </ul>
     <div class="vs" id="vApp"></div>
@@ -399,7 +400,6 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
 const CFG = {
   exigeFase:[{se:70,entao:75,texto:'pintura PU (fase 70) sem acabamento UV (fase 75)'}],
   tolQtd:0.05,
-  ignoraFunc:[],
   /* A5: Hrs Ind. ≥fator× (ou ≤1/fator) da mediana da mesma operação no
      produto, exigindo pelo menos `min` ocorrências com tempo para comparar.
      Fator alto de propósito: variação legítima entre peças não deve apitar. */
@@ -580,24 +580,10 @@ function analisar(ops){
       pior: ach.length ? ach[0].sev : null});
   }
 
-  const pm=new Map();
-  for(const o of ops){
-    if(CFG.ignoraFunc.indexOf(o.maq)>=0) continue;
-    if(!pm.has(o.maq)) pm.set(o.maq,new Map());
-    const m=pm.get(o.maq);
-    if(!m.has(o.func)) m.set(o.func,new Set());
-    m.get(o.func).add(o.cod);
-  }
-  pm.forEach(function(m,maq){
-    if(m.size<2) return;
-    const ps=[];
-    Array.from(m.entries()).sort((a,b)=>a[0]-b[0]).forEach(function(e){
-      ps.push(e[0]+' func. em '+e[1].size+' item'+(e[1].size>1?'s':''));
-    });
-    globais.push({sev:'a',rg:'A3',ref:maq,ti:'Nº de funcionários divergente na mesma máquina',
-      pq:'A '+maq+' aparece com '+ps.join(' e ')+'. O cálculo de hora-homem fica inconsistente entre itens.',
-      fz:'Padronizar o nº de funcionários da '+maq+' em todos os roteiros.'});
-  });
+  /* NÃO EXISTE regra de nº de funcionários (a antiga A3).
+     Convenção confirmada em 24/08/2026: a quantidade de funcionários não
+     tem relevância no cadastro da Patrimar. Auditar o irrelevante é ruído.
+     O dado continua no parse e no CSV, caso volte a importar um dia. */
 
   const po=new Map();
   for(const o of ops){ if(!po.has(o.op)) po.set(o.op,new Set()); po.get(o.op).add(o.maq); }
@@ -792,17 +778,17 @@ function renderTabela(q){
   for(const o of l){
     if(o.cod!==ant){
       ant=o.cod;
-      html+='<tr class="grp"><td colspan="8"><span class="gc">'+esc(o.cod)+'</span>'+
+      html+='<tr class="grp"><td colspan="7"><span class="gc">'+esc(o.cod)+'</span>'+
         esc(o.desc)+'<span class="gn">nív. '+o.niv+'</span></td></tr>';
     }
     const s=mk[o.cod+'|'+o.nr]||mk[o.cod+'|'];
     const bg=s==='b'?'background:#FFF3EC':s==='a'?'background:#FDF8E7':'';
     html+='<tr style="'+bg+'"><td class="mono">'+esc(o.nr)+'</td><td>'+esc(o.op)+'</td>'+
-      '<td class="n">'+o.fase+'</td><td class="mono">'+esc(o.maq)+'</td><td class="n">'+o.func+'</td>'+
+      '<td class="n">'+o.fase+'</td><td class="mono">'+esc(o.maq)+'</td>'+
       '<td class="n">'+hms(o.ind)+'</td><td class="n">'+hms(o.tot)+'</td>'+
       '<td class="nt">'+esc(o.nota)+'</td></tr>';
   }
-  $('tbody').innerHTML=html||'<tr><td colspan="8" style="padding:16px;color:#6B7280">Nenhuma operação para este filtro.</td></tr>';
+  $('tbody').innerHTML=html||'<tr><td colspan="7" style="padding:16px;color:#6B7280">Nenhuma operação para este filtro.</td></tr>';
 }
 
 /* ============================ CSV ===================================== */
