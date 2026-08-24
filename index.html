@@ -71,6 +71,15 @@ main{max-width:1080px;margin:0 auto;padding:24px}
 .ver .d{font-size:14px;color:#4B5563}
 .ver.b .t{color:#7C2D12} .ver.a .t{color:#78350F} .ver.o .t{color:#14532D}
 
+#estBox{background:var(--surface);border:1px dashed var(--border2);border-radius:var(--r);
+  padding:10px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  font-size:13.5px;transition:.15s}
+#estBox.over{border-color:var(--vermelho);background:#FFF7F7}
+#estBox .eti{color:var(--muted)}
+#estBox .eti b{color:var(--texto)}
+#estStatus b{color:var(--ok)}
+#estStatus .err{color:#7C2D12}
+
 .barraf{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 .barraf .lb{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
 .chip{font:inherit;font-size:13px;font-weight:600;padding:5px 12px;border-radius:14px;cursor:pointer;
@@ -174,7 +183,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   html,body{background:#fff}
   body{font-size:9.6pt;line-height:1.42}
-  header,#zona,.barraf,details.tb,footer,.btn,.lk,#atualiza{display:none!important}
+  header,#zona,.barraf,details.tb,footer,.btn,.lk,#atualiza,#estBox{display:none!important}
   main{max-width:none;padding:0;margin:0}
   .pr{display:block}
 
@@ -324,6 +333,13 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
 
     <div id="veredito"></div>
 
+    <div id="estBox">
+      <span class="eti"><b>Cruzar com a estrutura</b> — solte aqui o PDF <em>Engenharia &rsaquo; Estrutura Sumarizada</em> do mesmo produto, ou</span>
+      <button class="btn sec" id="bEst">Escolher arquivo</button>
+      <input type="file" id="estArq" accept="application/pdf" hidden>
+      <span id="estStatus" role="status" aria-live="polite"></span>
+    </div>
+
     <div class="barraf">
       <span class="lb">Mostrar</span>
       <button class="chip" data-f="todos" aria-pressed="true">Tudo<span class="q" id="qT">0</span></button>
@@ -421,6 +437,17 @@ const CFG = {
      minoritária quando o produto tem uma fase dominante para ela.
      Fase errada desvia o avanço de fase e o apontamento da OP. */
   opFase:{minPadrao:3, fator:3},
+  /* Cruzamento com o relatório Estrutura Sumarizada (2º PDF, opcional). */
+  estrutura:{
+    prefixoPeca:['4','5'],   // peças fabricadas: precisam de roteiro (E1/E2/E3)
+    tolQtdDiv:0.001,
+    materialFase:[            // família de material → fase que o roteiro precisa ter
+      {prefixo:'605', fase:70, texto:'insumo de pintura PU (605.*)'},
+      {prefixo:'604', fase:75, texto:'material de acabamento UV (604.*)'},
+      {prefixo:'609', fase:65, texto:'fita de borda (609.*)'},
+      {prefixo:'607', fase:85, texto:'material de embalagem (607.*)'}
+    ]
+  },
   /* Prefixos de código cujo tempo zerado é esperado, não falha.
      Na Patrimar o produto acabado (1xx) é cabeçalho de estrutura: o tempo de
      embalagem fica no item de volume (5xx), não no pai. */
@@ -475,6 +502,77 @@ async function textoDoPdf(buf){
     }
   }
   return out.join('\n');
+}
+
+/* ==================== ESTRUTURA (2º PDF, opcional) ==================== */
+const RXE=/^(\d{3}\.\d{3}\.\d{3}) (.*?)\s*(\d[\d.]*,\d+) (\S{1,4}) /;
+function parseEstrutura(txt){
+  const r={pai:null, mats:[], pecas:[]};
+  let secPecas=false, ultimo=null;
+  for(const bruta of txt.split(/\r?\n/)){
+    const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
+    const p=/Produto Pai:\s*(\d{3}\.\d{3}\.\d{3})/.exec(l);
+    if(p){ r.pai=p[1]; continue; }
+    if(l.indexOf('Peças / Componentes')>=0){ secPecas=true; ultimo=null; continue; }
+    const m=RXE.exec(l);
+    if(m){
+      ultimo={cod:m[1],desc:m[2].trim(),qtd:parseFloat(m[3].replace(/\./g,'').replace(',','.'))};
+      (secPecas?r.pecas:r.mats).push(ultimo);
+    } else if(ultimo&&!ultimo.desc&&!/[:%]/.test(l)&&
+      !/^(Material|Peças|Totais|Núm\.|Vers|Página|PATRIMAR|CNPJ|Engenharia|Estrutura)/.test(l)){
+      /* descrição que quebrou para a linha de baixo */
+      ultimo.desc=l; ultimo=null;
+    }
+  }
+  return r;
+}
+
+function achadosEstrutura(est, itens, raizCod){
+  const CE=CFG.estrutura, achs=[];
+  const fabricada=c=>CE.prefixoPeca.some(p=>c.indexOf(p)===0);
+  const temRot=new Set(itens.map(i=>i.cod));
+  const qtdRot=new Map(); itens.forEach(i=>qtdRot.set(i.cod,i.qtd));
+  const fases=new Set(); itens.forEach(i=>i.ops.forEach(o=>fases.add(o.fase)));
+
+  for(const p of est.pecas){
+    if(!fabricada(p.cod)) continue;
+    if(!temRot.has(p.cod)){
+      achs.push({sev:'b',rg:'E1',ref:p.cod,ti:'Peça da estrutura sem roteiro',
+        pq:'A estrutura produz '+p.cod+(p.desc?' ('+p.desc+')':'')+', mas o relatório de '+
+          'processos não traz roteiro para ela. Sem processo cadastrado, a OP da peça não gera e o produto trava.',
+        fz:'Cadastrar o roteiro da peça no Industrial, ou retirá-la da estrutura se não é mais produzida.'});
+    } else {
+      const qr=qtdRot.get(p.cod);
+      if(qr!==null&&qr!==undefined&&Math.abs(qr-p.qtd)>CE.tolQtdDiv){
+        achs.push({sev:'a',rg:'E3',ref:p.cod,ti:'Quantidade divergente entre estrutura e roteiro',
+          pq:p.cod+' aparece com '+fmtQtd(p.qtd)+' na estrutura e '+fmtQtd(qr)+' no relatório de '+
+            'processos. Os dois vêm do mesmo cadastro: divergência indica relatório desatualizado ou edição pela metade.',
+          fz:'Reimprimir os dois relatórios; se a diferença persistir, corrigir a quantidade na estrutura.'});
+      }
+    }
+  }
+
+  const naEst=new Set(est.pecas.map(p=>p.cod));
+  for(const i of itens){
+    if(i.cod===raizCod||!fabricada(i.cod)) continue;
+    if(!naEst.has(i.cod)){
+      achs.push({sev:'a',rg:'E2',ref:i.cod,ti:'Roteiro de peça que a estrutura não produz',
+        pq:i.cod+' tem roteiro no relatório de processos, mas não está na lista de peças da '+
+          'estrutura. Ou a peça saiu da estrutura e o roteiro ficou órfão, ou a estrutura está desatualizada.',
+        fz:'Confirmar na estrutura do produto; excluir o roteiro órfão se a peça não é mais usada.'});
+    }
+  }
+
+  for(const mf of CE.materialFase){
+    if(!est.mats.some(m=>m.cod.indexOf(mf.prefixo)===0)) continue;
+    if(!fases.has(mf.fase)){
+      achs.push({sev:'a',rg:'E4',ref:mf.prefixo+'.*',ti:'Material sem a fase correspondente no roteiro',
+        pq:'A estrutura consome '+mf.texto+', mas nenhum item do roteiro tem a fase '+mf.fase+'. '+
+          'O roteiro está provavelmente incompleto — a baixa do material e o apontamento da fase ficam sem onde acontecer.',
+        fz:'Incluir no roteiro a operação da fase '+mf.fase+', ou revisar o consumo na estrutura.'});
+    }
+  }
+  return achs;
 }
 
 /* ============================ REGRAS ================================== */
@@ -701,35 +799,43 @@ function render(ops){
   $('nTp').textContent=hms(ops.reduce((s,o)=>s+o.tot,0));
   $('tCt').textContent=ops.length;
 
-  let todos=[];
-  r.itens.forEach(i=>{ todos=todos.concat(i.ach); });
-  todos=todos.concat(r.globais);
-  const c={b:0,a:0,i:0}; todos.forEach(a=>c[a.sev]++);
-  $('qT').textContent=todos.length; $('qB').textContent=c.b;
-  $('qA').textContent=c.a;          $('qI').textContent=c.i;
-
-  const nB=r.itens.filter(i=>i.pior==='b').length;
-  const nA=r.itens.filter(i=>i.pior==='a').length;
-  let v;
-  if(nB) v={cls:'b',t:nB+(nB>1?' itens precisam':' item precisa')+' de correção antes de liberar',
-    d:'Achados classificados como bloqueador impedem a OP de gerar ou o apontamento de fechar corretamente.'};
-  else if(nA) v={cls:'a',t:'Nenhum bloqueador. '+nA+(nA>1?' itens com':' item com')+' desvio de custo ou carga',
-    d:'A OP roda, mas o custo do produto ou a carga-máquina saem distorcidos.'};
-  else v={cls:'o',t:'Nenhum bloqueador nem desvio de carga',
-    d:'A conferência é de consistência interna do roteiro — não substitui a validação dos tempos no chão de fábrica.'};
-  $('veredito').innerHTML='<div class="ver '+v.cls+'"><div class="t">'+v.t+'</div><div class="d">'+v.d+'</div></div>';
+  atualizarContagens(); renderVeredito();
 
   const chips=document.querySelectorAll('.chip');
   for(let i=0;i<chips.length;i++)
     chips[i].setAttribute('aria-pressed', chips[i].getAttribute('data-f')==='todos'?'true':'false');
 
-  renderLista(); renderCarga(ops); renderTabela(''); renderImpressao(r, ops);
+  $('estStatus').textContent=''; $('estArq').value='';
+  renderLista(); renderCarga(ops); renderTabela(''); renderImpressao();
   $('zona').style.display='none'; $('res').style.display='block';
   window.scrollTo(0,0);
 }
 
+function atualizarContagens(){
+  let todos=[];
+  E.itens.forEach(i=>{ todos=todos.concat(i.ach); });
+  todos=todos.concat(E.globais);
+  const c={b:0,a:0,i:0}; todos.forEach(a=>c[a.sev]++);
+  $('qT').textContent=todos.length; $('qB').textContent=c.b;
+  $('qA').textContent=c.a;          $('qI').textContent=c.i;
+}
+
+function renderVeredito(){
+  const nB=E.itens.filter(i=>i.pior==='b').length, gB=E.globais.filter(a=>a.sev==='b').length;
+  const nA=E.itens.filter(i=>i.pior==='a').length, gA=E.globais.filter(a=>a.sev==='a').length;
+  let v;
+  if(nB+gB) v={cls:'b',t:(nB+gB)+((nB+gB)>1?' achados bloqueadores':' achado bloqueador')+' — corrigir antes de liberar',
+    d:'Achados classificados como bloqueador impedem a OP de gerar ou o apontamento de fechar corretamente.'};
+  else if(nA+gA) v={cls:'a',t:'Nenhum bloqueador. '+(nA+gA)+((nA+gA)>1?' achados':' achado')+' de atenção',
+    d:'A OP roda, mas custo, carga ou o roteamento do apontamento saem distorcidos.'};
+  else v={cls:'o',t:'Nenhum bloqueador nem desvio de carga',
+    d:'A conferência é de consistência interna do roteiro — não substitui a validação dos tempos no chão de fábrica.'};
+  $('veredito').innerHTML='<div class="ver '+v.cls+'"><div class="t">'+v.t+'</div><div class="d">'+v.d+'</div></div>';
+}
+
 /* Cabeçalho e índice que só aparecem no papel */
-function renderImpressao(r, ops){
+function renderImpressao(){
+  const r={itens:E.itens, globais:E.globais}, ops=E.ops;
   const raiz=ops.find(o=>o.niv===0)||ops[0];
   $('prCod').textContent = raiz?raiz.cod:'—';
   $('prNome').textContent= raiz?raiz.desc:'—';
@@ -919,6 +1025,46 @@ async function lerPdf(file){
     $('colarBox').style.display='block';
   }
 }
+
+/* ============= CRUZAMENTO COM A ESTRUTURA (2º arquivo) ================ */
+async function lerEstrutura(file){
+  $('estStatus').innerHTML='Lendo '+esc(file.name)+'…';
+  try{
+    if(typeof pdfjsLib==='undefined') throw new Error('biblioteca de PDF não carregou');
+    aplicarEstrutura(parseEstrutura(await textoDoPdf(await file.arrayBuffer())));
+  }catch(e){
+    $('estStatus').innerHTML='<span class="err">Falha ao ler o PDF ('+esc(e.message)+').</span>';
+  }
+}
+function aplicarEstrutura(est){
+  const raiz=E.ops.find(o=>o.niv===0)||E.ops[0];
+  if(!est.pecas.length&&!est.mats.length){
+    $('estStatus').innerHTML='<span class="err">Não parece o relatório "Estrutura Sumarizada" — nenhum material lido.</span>';
+    return;
+  }
+  if(est.pai&&raiz&&est.pai!==raiz.cod){
+    $('estStatus').innerHTML='<span class="err">Este PDF é a estrutura de outro produto ('+esc(est.pai)+
+      '). Carregue a estrutura de '+esc(raiz.cod)+'.</span>';
+    return;
+  }
+  /* recruzar substitui os achados E anteriores */
+  E.globais=E.globais.filter(a=>String(a.rg).indexOf('E')!==0);
+  const achs=achadosEstrutura(est, E.itens, raiz?raiz.cod:null);
+  const peso={b:0,a:1,i:2};
+  E.globais=E.globais.concat(achs).sort((x,y)=>peso[x.sev]-peso[y.sev]);
+  atualizarContagens(); renderVeredito(); renderLista(); renderImpressao();
+  $('estStatus').innerHTML='<b>Estrutura cruzada</b> — '+
+    est.pecas.length+' peça'+(est.pecas.length===1?'':'s')+' e '+
+    est.mats.length+(est.mats.length===1?' material conferido':' materiais conferidos')+': '+(achs.length
+      ? achs.length+' achado'+(achs.length>1?'s':'')+' (ver observações gerais).'
+      : 'nenhuma divergência.');
+}
+const estBox=$('estBox');
+['dragenter','dragover'].forEach(ev=>estBox.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();estBox.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>estBox.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();estBox.classList.remove('over');}));
+estBox.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f) lerEstrutura(f);});
+$('bEst').addEventListener('click',()=>$('estArq').click());
+$('estArq').addEventListener('change',e=>{if(e.target.files[0]) lerEstrutura(e.target.files[0]);});
 
 const zona=$('zona');
 ['dragenter','dragover'].forEach(ev=>zona.addEventListener(ev,e=>{e.preventDefault();zona.classList.add('over');}));
