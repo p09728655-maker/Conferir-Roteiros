@@ -20,6 +20,23 @@ Aberto por duplo clique no `index.html` continua funcionando como página comum.
 Se o PDF for digitalizado (imagem) o texto não é extraível — use a opção
 "colar o texto do relatório".
 
+### Cruzar com a estrutura (opcional)
+
+Na tela de resultado há uma caixa para soltar um segundo PDF: **Engenharia ›
+Estrutura Sumarizada** do mesmo produto. O cruzamento confere roteiro × estrutura:
+
+| Regra | Verificação |
+|---|---|
+| E1 (bloqueador) | Peça fabricada na estrutura **sem roteiro** no relatório de processos — a OP não gera |
+| E2 | Roteiro de peça que a estrutura não produz (roteiro órfão ou estrutura desatualizada) |
+| E3 | Quantidade divergente entre estrutura e roteiro para a mesma peça |
+| E4 | Estrutura consome material de uma família (PU 605, UV 604, fita de borda 609, embalagem 607) e o roteiro não tem a fase correspondente |
+
+O mapeamento família → fase fica em `CFG.estrutura.materialFase`. A Estrutura
+Sumarizada **não traz a fase de consumo do componente** — essa coerência continua
+exigindo conferência na tela (se o Industrial tiver um relatório de estrutura
+analítica com a coluna de fase, ele destrava essa checagem).
+
 ### Instalar como app
 
 - **Android / Chrome / Edge** — abra o endereço publicado e toque em **Instalar app**
@@ -83,8 +100,10 @@ onde está concentrado o tempo — não a capacidade disponível.
 - **Consumo de material.** O relatório de processos não traz esse dado. A quantidade de
   estrutura (Qtd.Estru) passou a vir no relatório atual: é exibida por item e conferida
   pela B1. O parser lê os dois formatos — com e sem a coluna.
-- **Coerência entre a fase do componente e a fase do roteiro.** Mesmo motivo. É a origem
-  de boa parte dos erros reais de cadastro e continua exigindo conferência na tela.
+- **Coerência entre a fase do componente e a fase do roteiro.** A Estrutura Sumarizada
+  não traz a fase de consumo. O cruzamento (regras E) cobre parte do risco — peça sem
+  roteiro, quantidade divergente, material sem fase — mas a fase de consumo em si
+  continua exigindo conferência na tela.
 - **Marcação de fim de fase.** Não consta no relatório.
 - **Nº de funcionários.** A quantidade não tem relevância no cadastro da Patrimar
   (convenção confirmada em 24/08/2026) — a antiga regra A3 foi removida por isso.
