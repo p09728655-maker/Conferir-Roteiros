@@ -3,7 +3,7 @@
    o sw.js novo, baixa tudo de novo e o app oferece "Atualizar" ao usuário. */
 'use strict';
 
-const VERSAO = '2.3.0';
+const VERSAO = '2.4.0';
 const CACHE = 'conferir-roteiro-' + VERSAO;
 
 const SHELL = [
@@ -33,6 +33,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('message', e => {
   if (e.data === 'ATIVAR') self.skipWaiting();
+  else if (e.data === 'VERSAO?' && e.ports[0]) e.ports[0].postMessage(VERSAO);
 });
 
 /* Cache-first: o app é todo local e versionado pelo VERSAO acima.

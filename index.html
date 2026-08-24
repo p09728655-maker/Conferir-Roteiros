@@ -155,6 +155,7 @@ footer{max-width:1080px;margin:28px auto 0;padding:20px 24px;border-top:1px soli
 footer h4{font-size:13px;color:var(--texto);margin:0 0 6px}
 footer ul{margin:0 0 14px;padding-left:18px}
 footer li{margin-bottom:3px}
+footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#9AA3AD}
 
 #atualiza{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
   background:var(--grafite);color:#fff;padding:10px 12px 10px 18px;border-radius:8px;
@@ -368,7 +369,7 @@ footer li{margin-bottom:3px}
     <h4>O que ela confere</h4>
     <ul>
       <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1) e fase fora de ordem crescente no roteiro (B2). Impedem a OP de gerar ou o apontamento de fechar.</li>
-      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), nº de funcionários divergente na mesma máquina entre itens (A3), pintura PU (fase 70) sem acabamento UV (fase 75) (A4) e tempo muito fora do padrão da operação (A5). Distorcem custo ou carga-máquina.</li>
+      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), nº de funcionários divergente na mesma máquina entre itens (A3), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação (A5) e operação que não bate com o padrão da máquina (A6). Distorcem custo ou carga-máquina.</li>
       <li><b>Informativo</b> — roteiro que não inicia em 010 (I2) e mesma operação distribuída em máquinas diferentes (I3). Padronização de cadastro.</li>
       <li><b>Carga por máquina</b> — soma do tempo do produto por recurso, mostrando onde o tempo está concentrado.</li>
     </ul>
@@ -379,6 +380,7 @@ footer li{margin-bottom:3px}
       <li>Marcação de fim de fase — não consta neste relatório.</li>
       <li>Duplicidade de operação. Um passe legítimo (um lado por operação, conforme a convenção da Patrimar) e uma linha duplicada por engano ficam idênticos no relatório — não há como separar os dois.</li>
     </ul>
+    <div class="vs" id="vApp"></div>
   </footer>
 </main>
 
@@ -402,6 +404,11 @@ const CFG = {
      produto, exigindo pelo menos `min` ocorrências com tempo para comparar.
      Fator alto de propósito: variação legítima entre peças não deve apitar. */
   tempoFora:{fator:8, min:3},
+  /* A6: operação minoritária numa máquina que executa outra operação como
+     padrão no produto (ex.: 1 linha PINTAR PU numa LPT01 que só faz
+     PINTAR UV). minPadrao = ocorrências mínimas da operação dominante;
+     fator = quantas vezes a dominante precisa superar a minoritária. */
+  opMaquina:{minPadrao:3, fator:3},
   /* Prefixos de código cujo tempo zerado é esperado, não falha.
      Na Patrimar o produto acabado (1xx) é cabeçalho de estrutura: o tempo de
      embalagem fica no item de volume (5xx), não no pai. */
@@ -467,6 +474,14 @@ function analisar(ops){
     if(o.ind>0){ if(!tempoOp.has(o.op)) tempoOp.set(o.op,[]); tempoOp.get(o.op).push(o.ind); }
   }
 
+  /* Operações por máquina no produto inteiro — base da regra A6. */
+  const maqOp=new Map();
+  for(const o of ops){
+    if(!maqOp.has(o.maq)) maqOp.set(o.maq,new Map());
+    const m=maqOp.get(o.maq);
+    m.set(o.op,(m.get(o.op)||0)+1);
+  }
+
   const itens=[];
   for(const [cod,v] of porItem){
     const ach=[];
@@ -525,6 +540,22 @@ function analisar(ops){
           'Pode ser erro de digitação no cadastro.',
           'Confirmar o tempo real (cronometragem ou histórico) e corrigir. '+
           'Se a diferença for legítima desta máquina ou peça, manter.');
+      }
+    }
+
+    for(const o of v){
+      const m=maqOp.get(o.maq); if(!m||m.size<2) continue;
+      let domOp=null, domN=0;
+      m.forEach(function(n,op){ if(n>domN){domN=n; domOp=op;} });
+      const meuN=m.get(o.op);
+      if(domOp===o.op) continue;
+      if(domN>=CFG.opMaquina.minPadrao && domN>=CFG.opMaquina.fator*meuN){
+        A('a','A6',o.nr,'Operação não bate com o padrão da máquina',
+          o.op+' na '+o.maq+' destoa do resto do produto: a '+o.maq+' executa '+domOp+
+          ' nas outras '+domN+' operações em que aparece'+(meuN>1?' (esta combinação ocorre '+meuN+'×)':'')+
+          '. Provável troca no cadastro.',
+          'Confirmar o que acontece de fato e corrigir: ou a operação aqui é '+domOp+
+          ', ou a máquina não é a '+o.maq+'.');
       }
     }
 
@@ -881,13 +912,22 @@ if('serviceWorker' in navigator){
           if(nv.state==='installed'&&navigator.serviceWorker.controller) avisarAtualiza(reg);
         });
       });
+      navigator.serviceWorker.ready.then(mostrarVersao);
     }).catch(function(){});
     /* Só recarrega quando o usuário pediu a atualização — nunca sozinho:
        no primeiro acesso o claim() do SW também dispara controllerchange. */
     navigator.serviceWorker.addEventListener('controllerchange',function(){
       if(pediuAtualizar){ pediuAtualizar=false; location.reload(); }
+      else mostrarVersao();
     });
   });
+}
+/* O rodapé pergunta a versão ao service worker: um número só, no sw.js. */
+function mostrarVersao(){
+  if(!navigator.serviceWorker.controller) return;
+  const mc=new MessageChannel();
+  mc.port1.onmessage=function(e){ $('vApp').textContent='Versão '+e.data; };
+  navigator.serviceWorker.controller.postMessage('VERSAO?',[mc.port2]);
 }
 let pediuAtualizar=false;
 function avisarAtualiza(reg){
