@@ -53,6 +53,7 @@ Depois de instalado o app abre e analisa PDFs sem internet.
 | Arquivo | Papel |
 |---|---|
 | `index.html` | O app inteiro — tela, parser e regras |
+| `logo-patrimar.png` | Logomarca — padrão visual dos apps Patrimar (topo e folha impressa) |
 | `sw.js` | Service worker: cache offline e **versão do app** |
 | `manifest.webmanifest` | Identidade do app instalado (nome, ícone, cores) |
 | `vendor/` | pdf.js local (build legacy, compatível com tablets antigos) |
@@ -164,6 +165,11 @@ de build. Conecte o repositório e publique. O PWA exige HTTPS — a Vercel já 
 
 Parser validado contra o relatório real da PENTEADEIRA PRINCESA BRANCO (114.003.001):
 108 operações e 20 itens lidos, sem falha de leitura.
+
+Descrição comprida não é mais cortada: a coluna Descrição do relatório corta na
+largura (30 caracteres) e o excedente desce para a linha de baixo do PDF — o parser
+emenda a continuação de volta. No cruzamento com a estrutura, a descrição completa
+que vem de lá substitui qualquer resto de corte.
 
 Duas regras foram removidas depois de confrontadas com a convenção real da fábrica —
 geravam falso positivo. Regra que não distingue erro de padrão não deve existir.

@@ -3,13 +3,14 @@
    o sw.js novo, baixa tudo de novo e o app oferece "Atualizar" ao usuário. */
 'use strict';
 
-const VERSAO = '2.15.0';
+const VERSAO = '2.16.0';
 const CACHE = 'conferir-roteiro-' + VERSAO;
 
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './logo-patrimar.png',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
   './icons/favicon.svg',

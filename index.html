@@ -26,8 +26,13 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--texto);
   font-family:'Calibri','Carlito','Segoe UI',system-ui,sans-serif;font-size:15px;line-height:1.5}
-header{background:var(--grafite);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-header .m{width:4px;height:24px;background:var(--vermelho);border-radius:2px}
+/* Padrão dos apps Patrimar: barra grafite com filete vermelho e a
+   logomarca num chip branco (a marca é vermelha — não lê no escuro). */
+header{background:var(--grafite);color:#fff;padding:10px 24px;display:flex;align-items:center;gap:14px;
+  flex-wrap:wrap;border-bottom:3px solid var(--vermelho)}
+header .lg{height:36px;width:auto;display:block;background:#fff;padding:5px 10px;border-radius:6px;
+  box-shadow:0 1px 2px rgba(0,0,0,.28)}
+header .m{width:1px;height:26px;background:rgba(255,255,255,.18)}
 header h1{font-size:17px;margin:0;font-weight:600}
 header .s{font-size:13px;color:#A9B0B8;margin-left:auto}
 main{max-width:1080px;margin:0 auto;padding:24px}
@@ -187,15 +192,21 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
   main{max-width:none;padding:0;margin:0}
   .pr{display:block}
 
-  /* cabeçalho impresso */
-  .pr-cab{border-bottom:2.5pt solid var(--grafite);padding-bottom:5pt;margin-bottom:10pt}
-  .pr-cab .l1{display:flex;align-items:baseline;gap:8pt}
-  .pr-cab .mk{width:3pt;height:13pt;background:var(--vermelho)}
-  .pr-cab h1{font-size:13pt;margin:0;font-weight:700}
-  .pr-cab .emp{margin-left:auto;font-size:8.5pt;color:#555;text-align:right}
-  .pr-cab .l2{margin-top:4pt;font-size:10pt}
+  /* cabeçalho impresso — padrão dos relatórios Patrimar (Controle de
+     Faltas, Radar): logo à esquerda, título em vermelho à direita,
+     filete vermelho embaixo e faixa areia para o produto */
+  .pr-cab{border-bottom:2.5pt solid var(--vermelho);padding-bottom:6pt;margin-bottom:10pt}
+  .pr-cab .l1{display:flex;align-items:center;gap:10pt}
+  .pr-cab .lg{height:30pt;width:auto}
+  .pr-cab .tit{margin-left:auto;text-align:right}
+  .pr-cab h1{font-size:14pt;margin:0;font-weight:700;color:var(--bordeaux);letter-spacing:.3pt}
+  .pr-cab .sub{font-size:8.5pt;color:#555}
+  .pr-cab .l2{margin-top:6pt;font-size:10pt;background:var(--areia)!important;
+    border-left:3pt solid var(--vermelho);padding:4pt 8pt}
   .pr-cab .l2 b{font-family:ui-monospace,Consolas,monospace}
-  .pr-cab .l3{margin-top:2pt;font-size:8.5pt;color:#555}
+  .pr-cab .l3{margin-top:3pt;font-size:8.5pt;color:#555}
+  .pr-rod{margin-top:10pt;font-size:8pt;color:#888;text-align:center;
+    border-top:.5pt solid #C9CFD6;padding-top:5pt}
 
   /* índice */
   .pr-idx{margin-bottom:11pt;break-inside:avoid}
@@ -280,6 +291,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
 }
 @media(max-width:720px){
   main{padding:12px}
+  header .lg{height:30px;padding:4px 8px}
   .cab .n{margin-left:0;width:100%;text-align:left;gap:18px}
   .br{grid-template-columns:50px 1fr 78px}
   .ach .rg{display:none}
@@ -289,9 +301,10 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
 <body>
 
 <header>
+  <img class="lg" src="logo-patrimar.png" width="760" height="246" alt="Patrimar Móveis">
   <span class="m" aria-hidden="true"></span>
   <h1>Conferência de Roteiro</h1>
-  <span class="s">Patrimar Móveis &middot; PPCP / Engenharia</span>
+  <span class="s">PPCP / Engenharia</span>
   <button class="btn ghost" id="bInst" hidden>Instalar app</button>
 </header>
 
@@ -312,9 +325,11 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
   <section id="res">
     <div class="pr pr-cab">
       <div class="l1">
-        <span class="mk"></span>
-        <h1>Conferência de Roteiro</h1>
-        <span class="emp">PATRIMAR MÓVEIS LTDA<br>PPCP / Engenharia</span>
+        <img class="lg" src="logo-patrimar.png" width="760" height="246" alt="Patrimar Móveis">
+        <span class="tit">
+          <h1>Conferência de Roteiro</h1>
+          <span class="sub">PATRIMAR MÓVEIS LTDA &middot; PPCP / Engenharia</span>
+        </span>
       </div>
       <div class="l2"><b id="prCod">—</b> &nbsp;&mdash;&nbsp; <span id="prNome">—</span></div>
       <div class="l3" id="prMeta">—</div>
@@ -385,6 +400,8 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
         </table>
       </div>
     </details>
+
+    <div class="pr pr-rod">Patrimar Móveis &middot; Conferência de Roteiro &middot; PPCP / Engenharia</div>
   </section>
 
   <footer>
@@ -474,20 +491,37 @@ function hms(s){s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)
   return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');}
 const fmtQtd=v=>String(+v.toFixed(4)).replace('.',',');
 
+/* A coluna Descrição do relatório corta na largura (30 caracteres no
+   formato atual) e o excedente desce para a linha de baixo no PDF.
+   Uma linha curta logo após uma operação cuja descrição ENCHEU a coluna
+   é essa continuação — desde que não pareça cabeçalho, rodapé ou data.
+   A emenda é sem espaço: o corte é no meio da palavra ("...488X150X1"+"5"). */
+const DESC_CHEIA=25;
+const RXPAG=/^(PATRIMAR|CNPJ|Engenharia|Process|P[áa]gina|Produto|N[íi]vel|Item|Descri|Qtd|Fase|M[áa]quina|Func|Hrs?\b|Total|Emiss|Vers|N[úu]m|Data|Hora|Folha|Usu[áa]rio|Impress|Per[íi]odo|Relat)/i;
+const contDesc=l=>l.length<=40&&!/[:%]/.test(l)&&!/\d{2}[\/.]\d{2}/.test(l)&&!RXPAG.test(l);
+
 function parseTexto(txt){
-  const ops=[];
+  const ops=[]; let pend=null;
   for(const bruta of txt.split(/\r?\n/)){
     const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
     let m=RXQ.exec(l), d=0, qtd=null;
     if(m){ qtd=parseFloat(m[4].replace(/\./g,'').replace(',','.')); d=1; }
     else m=RXS.exec(l);
-    if(m){ops.push({niv:+m[1],cod:m[2],desc:m[3].trim(),qtd:qtd,
-      nr:m[4+d],op:m[5+d].trim(),
-      fase:+m[6+d],maq:m[7+d],func:+m[8+d],ind:seg(m[9+d]),tot:seg(m[10+d]),nota:''});}
+    if(m){
+      pend={niv:+m[1],cod:m[2],desc:m[3].trim(),qtd:qtd,
+        nr:m[4+d],op:m[5+d].trim(),
+        fase:+m[6+d],maq:m[7+d],func:+m[8+d],ind:seg(m[9+d]),tot:seg(m[10+d]),nota:''};
+      ops.push(pend);
+    }
     else if(ops.length&&l.indexOf('Informação p/ OF')>=0){
       const n=l.split('Informação p/ OF')[1].trim();
       if(n) ops[ops.length-1].nota=n;
+      pend=null;
     }
+    else if(pend&&pend.desc.length>=DESC_CHEIA&&contDesc(l)){
+      pend.desc+=l; pend=null;
+    }
+    else pend=null;
   }
   return ops;
 }
@@ -856,7 +890,11 @@ function analisar(ops){
 
     const ord={b:0,a:1,i:2};
     ach.sort((x,y)=>ord[x.sev]-ord[y.sev]);
-    itens.push({cod:cod, desc:v[0].desc, niv:v[0].niv, qtd:v[0].qtd, ops:v, ach:ach,
+    /* A continuação da descrição pode ter sido capturada em só uma das
+       linhas do item (quebra de página no meio) — vale a mais completa. */
+    let dsc=v[0].desc;
+    for(const o of v) if(o.desc.length>dsc.length) dsc=o.desc;
+    itens.push({cod:cod, desc:dsc, niv:v[0].niv, qtd:v[0].qtd, ops:v, ach:ach,
       pior: ach.length ? ach[0].sev : null});
   }
 
@@ -1161,6 +1199,17 @@ function aplicarEstrutura(est){
       '). Carregue a estrutura de '+esc(raiz.cod)+'.</span>';
     return;
   }
+  /* A estrutura imprime a descrição completa (no roteiro a coluna corta
+     na largura) — o cruzamento aproveita para restaurar o texto integral. */
+  const descEst=new Map();
+  const coleta=function(e){
+    if(e.cod&&e.desc&&(!descEst.has(e.cod)||e.desc.length>descEst.get(e.cod).length))
+      descEst.set(e.cod,e.desc);
+  };
+  (est.linhas||[]).forEach(coleta); est.pecas.forEach(coleta); est.mats.forEach(coleta);
+  E.ops.forEach(function(o){ const d=descEst.get(o.cod); if(d&&d.length>o.desc.length) o.desc=d; });
+  E.itens.forEach(function(i){ const d=descEst.get(i.cod); if(d&&d.length>i.desc.length) i.desc=d; });
+  if(raiz) $('pNome').textContent=raiz.desc;
   /* recruzar substitui os achados E anteriores, nos globais e nos itens */
   const ehE=a=>String(a.rg).indexOf('E')===0;
   E.globais=E.globais.filter(a=>!ehE(a));
@@ -1178,6 +1227,7 @@ function aplicarEstrutura(est){
   E.itens.sort((a,b)=>
     (a.pior?peso[a.pior]:3)-(b.pior?peso[b.pior]:3) || a.cod.localeCompare(b.cod));
   atualizarContagens(); renderVeredito(); renderLista(); renderImpressao();
+  renderTabela($('busca').value);
   const total=res.globais.length+nosItens;
   $('estStatus').innerHTML='<b>Estrutura cruzada</b>'+
     (est.formato==='nivel'?' (nível a nível)':'')+' — '+
