@@ -54,6 +54,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 |---|---|
 | B1 | Quantidade fracionária do item no produto (pela Qtd.Estru do relatório; no formato antigo, inferida pela razão Hrs Total / Hrs Ind.) |
 | B2 | Fase fora de ordem crescente dentro do roteiro |
+| B3 | Nº de operação duplicado dentro do item — a chave da sequência da OP fica ambígua |
 
 ### Atenção — distorce custo ou carga-máquina
 
@@ -63,6 +64,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 | A4 | Item com pintura PU (fase 70) sem acabamento UV (fase 75) |
 | A5 | Hrs Ind. muito fora da mediana da mesma operação **na mesma máquina** no produto (provável erro de digitação) |
 | A6 | Operação minoritária numa máquina que executa outra operação como padrão (ex.: PINTAR PU numa máquina que só faz PINTAR UV) |
+| A7 | Operação numa fase minoritária quando o produto tem fase dominante para ela (fase errada desvia o avanço de fase); linha já apontada pela A6 não repete |
 
 ### Informativo — padronização de cadastro
 
@@ -105,6 +107,7 @@ const CFG = {
   tolQtd: 0.05,            // tolerância para considerar a quantidade inteira
   tempoFora: {fator:8, min:3}, // A5: ≥8× (ou ≤1/8) da mediana da operação, mín. 3 amostras
   opMaquina: {minPadrao:3, fator:3}, // A6: dominante ≥3 ocorrências e ≥3× a minoritária
+  opFase:    {minPadrao:3, fator:3}, // A7: mesma lógica, para a fase da operação
   prefixoSemTempo: ['1']   // itens cujo tempo zerado é esperado
 };
 ```
