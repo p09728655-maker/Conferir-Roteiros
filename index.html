@@ -242,6 +242,26 @@ footer li{margin-bottom:3px}
   .pr-ass div{flex:1}
   .pr-ass .ln{border-bottom:.6pt solid #333;height:20pt;margin-bottom:3pt}
   .pr-nota{margin-top:9pt;font-size:8pt;color:#666;line-height:1.45}
+
+  /* ---------- modo "imprimir roteiro completo" ---------- */
+  body.printRot .ver,body.printRot #lista,body.printRot .pn,body.printRot .pr-idx,
+  body.printRot .pr-ass,body.printRot .pr-nota,body.printRot h3.sc,
+  body.printRot .limpos{display:none!important}
+  body.printRot details.tb{display:block!important;margin-top:0}
+  body.printRot details.tb>summary{display:block;font-size:8.5pt;text-transform:uppercase;
+    letter-spacing:.6pt;color:#555;padding:0 0 4pt;list-style:none}
+  body.printRot details.tb>summary::-webkit-details-marker{display:none}
+  body.printRot .fr{display:none!important}
+  body.printRot .wp{border:none;overflow:visible;border-radius:0}
+  body.printRot table.full{font-size:8.3pt}
+  body.printRot table.full th{background:#EFF1F3!important;border:.5pt solid #B8BEC5;
+    position:static;padding:3pt 6pt;font-size:8pt}
+  body.printRot table.full td{border-bottom:.4pt solid #D8DDE2;padding:2.5pt 6pt}
+  body.printRot table.full td.nt{font-size:7.8pt}
+  body.printRot table.full tr{break-inside:avoid}
+  body.printRot table.full tr.grp{break-after:avoid}
+  body.printRot table.full tr.grp td{background:#F0F2F4!important;
+    border-top:1.2pt solid #7A828C;padding:4pt 6pt}
 }
 @media(max-width:720px){
   main{padding:12px}
@@ -330,6 +350,7 @@ footer li{margin-bottom:3px}
       <summary>Roteiro completo (<span id="tCt">0</span> operações)</summary>
       <div class="fr">
         <input id="busca" type="search" placeholder="Filtrar por item, operação ou máquina…" aria-label="Filtrar">
+        <button class="btn sec" id="bImpRot">Imprimir roteiro</button>
         <button class="btn sec" id="bCsv">Exportar CSV</button>
         <button class="btn sec" id="bNovo">Carregar outro</button>
       </div>
@@ -347,7 +368,7 @@ footer li{margin-bottom:3px}
     <h4>O que ela confere</h4>
     <ul>
       <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1) e fase fora de ordem crescente no roteiro (B2). Impedem a OP de gerar ou o apontamento de fechar.</li>
-      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), nº de funcionários divergente na mesma máquina entre itens (A3) e pintura PU (fase 70) sem acabamento UV (fase 75) (A4). Distorcem custo ou carga-máquina.</li>
+      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), nº de funcionários divergente na mesma máquina entre itens (A3), pintura PU (fase 70) sem acabamento UV (fase 75) (A4) e tempo muito fora do padrão da operação (A5). Distorcem custo ou carga-máquina.</li>
       <li><b>Informativo</b> — roteiro que não inicia em 010 (I2) e mesma operação distribuída em máquinas diferentes (I3). Padronização de cadastro.</li>
       <li><b>Carga por máquina</b> — soma do tempo do produto por recurso, mostrando onde o tempo está concentrado.</li>
     </ul>
@@ -377,6 +398,10 @@ const CFG = {
   exigeFase:[{se:70,entao:75,texto:'pintura PU (fase 70) sem acabamento UV (fase 75)'}],
   tolQtd:0.05,
   ignoraFunc:[],
+  /* A5: Hrs Ind. ≥fator× (ou ≤1/fator) da mediana da mesma operação no
+     produto, exigindo pelo menos `min` ocorrências com tempo para comparar.
+     Fator alto de propósito: variação legítima entre peças não deve apitar. */
+  tempoFora:{fator:8, min:3},
   /* Prefixos de código cujo tempo zerado é esperado, não falha.
      Na Patrimar o produto acabado (1xx) é cabeçalho de estrutura: o tempo de
      embalagem fica no item de volume (5xx), não no pai. */
@@ -436,6 +461,12 @@ function analisar(ops){
   const porItem=new Map(), globais=[];
   for(const o of ops){ if(!porItem.has(o.cod)) porItem.set(o.cod,[]); porItem.get(o.cod).push(o); }
 
+  /* Tempos por operação no produto inteiro — base da regra A5. */
+  const tempoOp=new Map();
+  for(const o of ops){
+    if(o.ind>0){ if(!tempoOp.has(o.op)) tempoOp.set(o.op,[]); tempoOp.get(o.op).push(o.ind); }
+  }
+
   const itens=[];
   for(const [cod,v] of porItem){
     const ach=[];
@@ -479,6 +510,23 @@ function analisar(ops){
        Repetição é o esperado. E uma duplicidade real de cadastro é idêntica
        a um passe legítimo neste relatório — não há como distinguir.
        Regra que não distingue gera só ruído. */
+
+    for(const o of v){
+      if(o.ind<=0) continue;
+      const g=tempoOp.get(o.op);
+      if(!g||g.length<CFG.tempoFora.min) continue;
+      const md=mediana(g); if(!md) continue;
+      const raz=o.ind/md;
+      if(raz>=CFG.tempoFora.fator||raz<=1/CFG.tempoFora.fator){
+        const vezes=Math.round(raz>=1?raz:1/raz);
+        A('a','A5',o.nr,'Tempo muito fora do padrão da operação',
+          o.op+' na '+o.maq+' está com Hrs Ind. de '+hms(o.ind)+' — '+vezes+'× '+
+          (raz>=1?'acima':'abaixo')+' da mediana de "'+o.op+'" neste produto ('+hms(md)+'). '+
+          'Pode ser erro de digitação no cadastro.',
+          'Confirmar o tempo real (cronometragem ou histórico) e corrigir. '+
+          'Se a diferença for legítima desta máquina ou peça, manter.');
+      }
+    }
 
     const fs=new Set(v.map(o=>o.fase));
     for(const r of CFG.exigeFase){
@@ -801,6 +849,18 @@ $('bImp').addEventListener('click',function(){
   if(anterior!=='todos'){ E.filtro='todos'; renderLista(); }
   window.print();
   if(anterior!=='todos'){ E.filtro=anterior; renderLista(); }
+});
+$('bImpRot').addEventListener('click',function(){
+  /* Papel sai sempre completo: filtro esquecido não pode virar roteiro
+     incompleto na mão de quem vai ao chão de fábrica. */
+  const q=$('busca').value, det=document.querySelector('details.tb'), aberto=det.open;
+  if(q) renderTabela('');
+  det.open=true;
+  document.body.classList.add('printRot');
+  window.print();
+  document.body.classList.remove('printRot');
+  det.open=aberto;
+  if(q) renderTabela(q);
 });
 $('bNovo').addEventListener('click',()=>{
   $('res').style.display='none'; $('zona').style.display='block';

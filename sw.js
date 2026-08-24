@@ -3,7 +3,7 @@
    o sw.js novo, baixa tudo de novo e o app oferece "Atualizar" ao usuário. */
 'use strict';
 
-const VERSAO = '2.2.0';
+const VERSAO = '2.3.0';
 const CACHE = 'conferir-roteiro-' + VERSAO;
 
 const SHELL = [
