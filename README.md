@@ -76,6 +76,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 | B1 | Quantidade fracionária do item no produto (pela Qtd.Estru do relatório; no formato antigo, inferida pela razão Hrs Total / Hrs Ind.). Sub-peças de lote múltiplo (sufixo .100) são isentas |
 | B2 | Fase fora de ordem crescente dentro do roteiro |
 | B3 | Nº de operação duplicado dentro do item — a chave da sequência da OP fica ambígua |
+| B4 | Nº de operação fora de ordem crescente dentro do item — a OP roda numa sequência diferente da impressa |
 
 ### Atenção — distorce custo ou carga-máquina
 

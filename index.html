@@ -407,7 +407,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
   <footer>
     <h4>O que ela confere</h4>
     <ul>
-      <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1), fase fora de ordem crescente no roteiro (B2) e nº de operação duplicado no item (B3). Impedem a OP de gerar ou o apontamento de fechar.</li>
+      <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1), fase fora de ordem crescente no roteiro (B2), nº de operação duplicado no item (B3) e nº de operação fora de ordem crescente (B4). Impedem a OP de gerar ou o apontamento de fechar.</li>
       <li><b>Atenção</b> — operação sem tempo cadastrado (A1), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação na mesma máquina (A5), operação que não bate com o padrão da máquina (A6) e fase que não bate com o padrão da operação (A7). Distorcem custo, carga ou o roteamento do apontamento.</li>
       <li><b>Informativo</b> — roteiro que não inicia em 010 (I2) e mesma operação distribuída em máquinas diferentes (I3). Padronização de cadastro.</li>
       <li><b>Carga por máquina</b> — soma do tempo do produto por recurso, mostrando onde o tempo está concentrado.</li>
@@ -774,8 +774,27 @@ function analisar(ops){
       }
     }
 
+    /* B4 — nº de operação fora de ordem crescente. A sequência impressa
+       é a sequência real do processo: um nº menor depois de um maior é
+       linha renumerada pela metade ou inserida no lugar errado, e o
+       apontamento segue outra ordem. Nº igual é assunto da B3. */
+    const b4Nrs=new Set();
     for(let i=1;i<v.length;i++){
-      if(v[i].fase<v[i-1].fase){
+      if(+v[i].nr<+v[i-1].nr){
+        b4Nrs.add(v[i].nr);
+        A('b','B4',v[i].nr,
+          'Nº de operação fora de ordem crescente',
+          'A operação '+v[i].nr+' vem depois da '+v[i-1].nr+' no roteiro. O nº da operação é a '+
+          'chave da sequência da OP: fora de ordem, a OP roda numa sequência diferente da impressa.',
+          'Renumerar as operações do item em ordem crescente (010, 020, 030…) conforme a sequência real.');
+      }
+    }
+
+    /* B2 — fase fora de ordem. Linha que a B4 já apontou não repete:
+       nº e fase quebrados juntos são a mesma linha no lugar errado —
+       um cartão basta (mesma convenção do par A6/A7). */
+    for(let i=1;i<v.length;i++){
+      if(v[i].fase<v[i-1].fase&&!b4Nrs.has(v[i].nr)){
         A('b','B2',v[i].nr,
           'Fase fora de ordem crescente',
           'A operação '+v[i].nr+' está na fase '+v[i].fase+', anterior à fase '+v[i-1].fase+
