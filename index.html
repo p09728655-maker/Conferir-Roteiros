@@ -145,6 +145,10 @@ table.full td{padding:6px 10px;border-bottom:1px solid var(--border);white-space
 table.full td.mono{font-family:ui-monospace,Consolas,monospace}
 table.full td.n{text-align:right;font-variant-numeric:tabular-nums}
 table.full td.nt{color:var(--muted);font-size:12px;white-space:normal}
+table.full tr.grp td{background:#F0F2F4;border-top:2px solid var(--border2);
+  padding:7px 10px;white-space:normal;font-size:12.5px}
+table.full tr.grp .gc{font-family:ui-monospace,Consolas,monospace;font-weight:700;margin-right:8px}
+table.full tr.grp .gn{float:right;color:var(--muted);font-size:11px}
 
 footer{max-width:1080px;margin:28px auto 0;padding:20px 24px;border-top:1px solid var(--border);
   font-size:13px;color:var(--muted)}
@@ -331,8 +335,8 @@ footer li{margin-bottom:3px}
       </div>
       <div class="wp">
         <table class="full">
-          <thead><tr><th>Nív.</th><th>Item</th><th>Descrição</th><th>Nr.</th><th>Operação</th>
-          <th>Fase</th><th>Máq.</th><th>Func.</th><th>Hrs Ind.</th><th>Hrs Total</th><th>Informação p/ OF</th></tr></thead>
+          <thead><tr><th>Nr.</th><th>Operação</th><th>Fase</th><th>Máq.</th><th>Func.</th>
+          <th>Hrs Ind.</th><th>Hrs Total</th><th>Informação p/ OF</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
@@ -703,15 +707,23 @@ function renderTabela(q){
     });
   });
   const l=E.ops.filter(o=>!q||(o.cod+' '+o.desc+' '+o.op+' '+o.maq+' '+o.nota).toLowerCase().indexOf(q)>=0);
-  $('tbody').innerHTML=l.map(function(o){
+  /* Agrupado por item: cabeçalho a cada troca de código, no lugar de
+     repetir item e descrição em todas as linhas. */
+  let html='', ant=null;
+  for(const o of l){
+    if(o.cod!==ant){
+      ant=o.cod;
+      html+='<tr class="grp"><td colspan="8"><span class="gc">'+esc(o.cod)+'</span>'+
+        esc(o.desc)+'<span class="gn">nív. '+o.niv+'</span></td></tr>';
+    }
     const s=mk[o.cod+'|'+o.nr]||mk[o.cod+'|'];
     const bg=s==='b'?'background:#FFF3EC':s==='a'?'background:#FDF8E7':'';
-    return '<tr style="'+bg+'"><td class="n">'+o.niv+'</td><td class="mono">'+esc(o.cod)+'</td>'+
-      '<td>'+esc(o.desc)+'</td><td class="mono">'+esc(o.nr)+'</td><td>'+esc(o.op)+'</td>'+
+    html+='<tr style="'+bg+'"><td class="mono">'+esc(o.nr)+'</td><td>'+esc(o.op)+'</td>'+
       '<td class="n">'+o.fase+'</td><td class="mono">'+esc(o.maq)+'</td><td class="n">'+o.func+'</td>'+
       '<td class="n">'+hms(o.ind)+'</td><td class="n">'+hms(o.tot)+'</td>'+
       '<td class="nt">'+esc(o.nota)+'</td></tr>';
-  }).join('')||'<tr><td colspan="11" style="padding:16px;color:#6B7280">Nenhuma operação para este filtro.</td></tr>';
+  }
+  $('tbody').innerHTML=html||'<tr><td colspan="8" style="padding:16px;color:#6B7280">Nenhuma operação para este filtro.</td></tr>';
 }
 
 /* ============================ CSV ===================================== */
