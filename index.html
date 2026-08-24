@@ -374,8 +374,8 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
   <footer>
     <h4>O que ela confere</h4>
     <ul>
-      <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1) e fase fora de ordem crescente no roteiro (B2). Impedem a OP de gerar ou o apontamento de fechar.</li>
-      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação na mesma máquina (A5) e operação que não bate com o padrão da máquina (A6). Distorcem custo ou carga-máquina.</li>
+      <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1), fase fora de ordem crescente no roteiro (B2) e nº de operação duplicado no item (B3). Impedem a OP de gerar ou o apontamento de fechar.</li>
+      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação na mesma máquina (A5), operação que não bate com o padrão da máquina (A6) e fase que não bate com o padrão da operação (A7). Distorcem custo, carga ou o roteamento do apontamento.</li>
       <li><b>Informativo</b> — roteiro que não inicia em 010 (I2) e mesma operação distribuída em máquinas diferentes (I3). Padronização de cadastro.</li>
       <li><b>Carga por máquina</b> — soma do tempo do produto por recurso, mostrando onde o tempo está concentrado.</li>
     </ul>
@@ -417,6 +417,10 @@ const CFG = {
      PINTAR UV). minPadrao = ocorrências mínimas da operação dominante;
      fator = quantas vezes a dominante precisa superar a minoritária. */
   opMaquina:{minPadrao:3, fator:3},
+  /* A7: mesma lógica da A6, para a FASE — operação cadastrada numa fase
+     minoritária quando o produto tem uma fase dominante para ela.
+     Fase errada desvia o avanço de fase e o apontamento da OP. */
+  opFase:{minPadrao:3, fator:3},
   /* Prefixos de código cujo tempo zerado é esperado, não falha.
      Na Patrimar o produto acabado (1xx) é cabeçalho de estrutura: o tempo de
      embalagem fica no item de volume (5xx), não no pai. */
@@ -497,6 +501,14 @@ function analisar(ops){
     m.set(o.op,(m.get(o.op)||0)+1);
   }
 
+  /* Fases por operação no produto inteiro — base da regra A7. */
+  const faseOp=new Map();
+  for(const o of ops){
+    if(!faseOp.has(o.op)) faseOp.set(o.op,new Map());
+    const m=faseOp.get(o.op);
+    m.set(o.fase,(m.get(o.fase)||0)+1);
+  }
+
   const itens=[];
   for(const [cod,v] of porItem){
     const ach=[];
@@ -529,6 +541,19 @@ function analisar(ops){
           'Confirmar a ordem real no chão de fábrica e corrigir a fase ou a numeração da operação '+v[i].nr+'.');
       }
     }
+
+    /* B3 — o nº da operação é a chave da sequência da OP: duplicado,
+       o apontamento fica ambíguo. Passes legítimos têm números próprios. */
+    const porNr=new Map();
+    for(const o of v) porNr.set(o.nr,(porNr.get(o.nr)||0)+1);
+    porNr.forEach(function(n,nr){
+      if(n>1){
+        A('b','B3',nr,'Nº de operação duplicado no item',
+          'A operação '+nr+' está cadastrada '+n+' vezes neste item. O número da operação é a '+
+          'chave da sequência da OP: duplicado, o apontamento fica ambíguo e trava o processo.',
+          'Renumerar as operações — cada passe tem seu próprio número (ex.: 060 e 070).');
+      }
+    });
 
     const isentoTempo = CFG.prefixoSemTempo.some(p => cod.indexOf(p) === 0);
     if(!isentoTempo){
@@ -568,6 +593,7 @@ function analisar(ops){
       }
     }
 
+    const a6Nrs=new Set();
     for(const o of v){
       const m=maqOp.get(o.maq); if(!m||m.size<2) continue;
       let domOp=null, domN=0;
@@ -575,12 +601,30 @@ function analisar(ops){
       const meuN=m.get(o.op);
       if(domOp===o.op) continue;
       if(domN>=CFG.opMaquina.minPadrao && domN>=CFG.opMaquina.fator*meuN){
+        a6Nrs.add(o.nr);
         A('a','A6',o.nr,'Operação não bate com o padrão da máquina',
           o.op+' na '+o.maq+' destoa do resto do produto: a '+o.maq+' executa '+domOp+
           ' nas outras '+domN+' operações em que aparece'+(meuN>1?' (esta combinação ocorre '+meuN+'×)':'')+
           '. Provável troca no cadastro.',
           'Confirmar o que acontece de fato e corrigir: ou a operação aqui é '+domOp+
           ', ou a máquina não é a '+o.maq+'.');
+      }
+    }
+
+    /* A7 — fase minoritária para a operação. Pula linha que a A6 já
+       apontou: é o mesmo erro visto por outro ângulo, um cartão basta. */
+    for(const o of v){
+      if(a6Nrs.has(o.nr)) continue;
+      const m=faseOp.get(o.op); if(!m||m.size<2) continue;
+      let domF=null, domN=0;
+      m.forEach(function(n,f){ if(n>domN){domN=n; domF=f;} });
+      const meuN=m.get(o.fase);
+      if(domF===o.fase) continue;
+      if(domN>=CFG.opFase.minPadrao && domN>=CFG.opFase.fator*meuN){
+        A('a','A7',o.nr,'Fase não bate com o padrão da operação',
+          o.op+' está na fase '+o.fase+' aqui, mas na fase '+domF+' nas outras '+domN+
+          ' vezes em que aparece neste produto. Fase errada desvia o avanço de fase e o apontamento da OP.',
+          'Confirmar a fase real desta operação e corrigir o cadastro.');
       }
     }
 
