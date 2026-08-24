@@ -88,6 +88,8 @@ h3.sc{font-size:12px;font-weight:700;letter-spacing:.7px;text-transform:uppercas
   align-items:baseline;flex-wrap:wrap;background:#FCFDFD}
 .item>.h .cod{font-family:ui-monospace,Consolas,monospace;font-weight:700;font-size:15px}
 .item>.h .ds{color:var(--muted);font-size:13px}
+.item>.h .qt{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted);
+  background:#F0F2F4;padding:1px 7px;border-radius:3px;white-space:nowrap}
 .item>.h .bd{margin-left:auto;display:flex;gap:5px}
 .tag{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:3px;white-space:nowrap}
 .tag.b{background:var(--bloq-bg);color:var(--bloq);border:1px solid var(--bloq-bd)}
@@ -325,7 +327,8 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
       <button class="chip" data-f="b" aria-pressed="false">Bloqueador<span class="q" id="qB">0</span></button>
       <button class="chip" data-f="a" aria-pressed="false">Atenção<span class="q" id="qA">0</span></button>
       <button class="chip" data-f="i" aria-pressed="false">Informativo<span class="q" id="qI">0</span></button>
-      <button class="btn sec" id="bImp" style="margin-left:auto">Imprimir</button>
+      <button class="btn sec" id="bNovoTopo" style="margin-left:auto">Carregar outro</button>
+      <button class="btn sec" id="bImp">Imprimir</button>
     </div>
 
     <div id="lista"></div>
@@ -375,7 +378,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
     </ul>
     <h4>O que ela não verifica</h4>
     <ul>
-      <li>Consumo de material, quantidades de estrutura e coerência entre a fase do componente e a fase do roteiro — o relatório de processos não traz esses dados.</li>
+      <li>Consumo de material e coerência entre a fase do componente e a fase do roteiro — o relatório de processos não traz esses dados. A quantidade de estrutura passou a vir no relatório atual e é conferida pela B1.</li>
       <li>Se o tempo cadastrado corresponde ao tempo real. Ela confere consistência interna, não realidade de chão de fábrica.</li>
       <li>Marcação de fim de fase — não consta neste relatório.</li>
       <li>Nº de funcionários por operação — a quantidade não tem relevância no cadastro da Patrimar. O dado sai apenas no CSV.</li>
@@ -415,19 +418,25 @@ const CFG = {
   prefixoSemTempo:['1']
 };
 
-/* ====================== PARSE (validado no relatório real) ============ */
-const RX=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.+?)(\d{3}) (.+?) (\d{2,3}) (\S+) (\d+) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2})$/;
+/* ====================== PARSE (validado no relatório real) ============
+   Dois formatos do Industrial: o antigo, sem quantidade, e o atual, com a
+   coluna Qtd.Estru (ex.: "2,0000") entre a descrição e o nº da operação.
+   O grupo da quantidade é opcional — o mesmo regex lê os dois. */
+const RX=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.+?) (?:(\d[\d.]*,\d+) )?(\d{3}) (.+?) (\d{2,3}) (\S+) (\d+) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2})$/;
 const seg=t=>{const p=t.split(':').map(Number);return p[0]*3600+p[1]*60+p[2];};
 function hms(s){s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;
   return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');}
+const fmtQtd=v=>String(+v.toFixed(4)).replace('.',',');
 
 function parseTexto(txt){
   const ops=[];
   for(const bruta of txt.split(/\r?\n/)){
     const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
     const m=RX.exec(l);
-    if(m){ops.push({niv:+m[1],cod:m[2],desc:m[3].trim(),nr:m[4],op:m[5].trim(),
-      fase:+m[6],maq:m[7],func:+m[8],ind:seg(m[9]),tot:seg(m[10]),nota:''});}
+    if(m){ops.push({niv:+m[1],cod:m[2],desc:m[3].trim(),
+      qtd:m[4]?parseFloat(m[4].replace(/\./g,'').replace(',','.')):null,
+      nr:m[5],op:m[6].trim(),
+      fase:+m[7],maq:m[8],func:+m[9],ind:seg(m[10]),tot:seg(m[11]),nota:''});}
     else if(ops.length&&l.indexOf('Informação p/ OF')>=0){
       const n=l.split('Informação p/ OF')[1].trim();
       if(n) ops[ops.length-1].nota=n;
@@ -487,14 +496,22 @@ function analisar(ops){
     const ach=[];
     const A=(sev,rg,ref,ti,pq,fz)=>ach.push({sev:sev,rg:rg,ref:ref,ti:ti,pq:pq,fz:fz});
 
-    const raz=v.filter(o=>o.ind>0).map(o=>o.tot/o.ind), q=mediana(raz);
-    if(q!==null&&q<1-CFG.tolQtd){
-      const den=Math.round(1/q);
-      A('b','B1','',
-        'Quantidade fracionária no produto',
-        'O ERP calcula '+q.toFixed(3).replace('.',',')+' unidade deste item por produto acabado. '+
-        'Não se produz fração de peça: com lote fora do múltiplo, a OP sai quebrada e o apontamento não fecha.',
-        'Fixar lote múltiplo de '+den+', ou revisar a quantidade de consumo na estrutura.');
+    /* B1 — com o relatório atual a Qtd.Estru vem impressa e a checagem é
+       exata; no formato antigo, infere pela razão Hrs Total / Hrs Ind. */
+    const qEstru=v[0].qtd;
+    const q=(qEstru!==null)?qEstru:mediana(v.filter(o=>o.ind>0).map(o=>o.tot/o.ind));
+    if(q!==null){
+      const frac=Math.abs(q-Math.round(q));
+      if(frac>CFG.tolQtd){
+        const den=Math.round(1/frac);
+        A('b','B1','',
+          'Quantidade fracionária no produto',
+          (qEstru!==null
+            ?'A estrutura cadastra '+fmtQtd(q)+' unidade deste item por produto acabado. '
+            :'O ERP calcula '+q.toFixed(3).replace('.',',')+' unidade deste item por produto acabado. ')+
+          'Não se produz fração de peça: com lote fora do múltiplo, a OP sai quebrada e o apontamento não fecha.',
+          'Fixar lote múltiplo de '+den+', ou revisar a quantidade de consumo na estrutura.');
+      }
     }
 
     for(let i=1;i<v.length;i++){
@@ -576,7 +593,7 @@ function analisar(ops){
 
     const ord={b:0,a:1,i:2};
     ach.sort((x,y)=>ord[x.sev]-ord[y.sev]);
-    itens.push({cod:cod, desc:v[0].desc, niv:v[0].niv, ops:v, ach:ach,
+    itens.push({cod:cod, desc:v[0].desc, niv:v[0].niv, qtd:v[0].qtd, ops:v, ach:ach,
       pior: ach.length ? ach[0].sev : null});
   }
 
@@ -715,6 +732,7 @@ function renderLista(){
         '<div class="item '+lista[0].sev+'">'+
           '<div class="h"><span class="cod">'+esc(it.cod)+'</span>'+
             '<span class="ds">'+esc(it.desc)+'</span>'+
+            (it.qtd!==null?'<span class="qt">qtd. '+fmtQtd(it.qtd)+'</span>':'')+
             '<span class="bd">'+sevs.map(s=>'<span class="tag '+s+'">'+ROT[s]+'</span>').join('')+'</span></div>'+
           rot + lista.map(achHTML).join('')+
         '</div>');
@@ -779,7 +797,8 @@ function renderTabela(q){
     if(o.cod!==ant){
       ant=o.cod;
       html+='<tr class="grp"><td colspan="7"><span class="gc">'+esc(o.cod)+'</span>'+
-        esc(o.desc)+'<span class="gn">nív. '+o.niv+'</span></td></tr>';
+        esc(o.desc)+'<span class="gn">'+(o.qtd!==null?'qtd. '+fmtQtd(o.qtd)+' · ':'')+
+        'nív. '+o.niv+'</span></td></tr>';
     }
     const s=mk[o.cod+'|'+o.nr]||mk[o.cod+'|'];
     const bg=s==='b'?'background:#FFF3EC':s==='a'?'background:#FDF8E7':'';
@@ -796,9 +815,9 @@ function csv(){
   const rg={};
   E.itens.forEach(function(it){ if(it.ach.length) rg[it.cod]=it.ach.map(a=>a.rg).join(' '); });
   const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
-  const L=['Nivel;Item;Descricao;Nr;Operacao;Fase;Maquina;Funcionarios;HrsInd_seg;HrsTotal_seg;InformacaoOF;Regras'];
+  const L=['Nivel;Item;Descricao;QtdEstru;Nr;Operacao;Fase;Maquina;Funcionarios;HrsInd_seg;HrsTotal_seg;InformacaoOF;Regras'];
   E.ops.forEach(function(o){
-    L.push([o.niv,o.cod,q(o.desc),o.nr,q(o.op),o.fase,o.maq,o.func,o.ind,o.tot,
+    L.push([o.niv,o.cod,q(o.desc),o.qtd===null?'':fmtQtd(o.qtd),o.nr,q(o.op),o.fase,o.maq,o.func,o.ind,o.tot,
             q(o.nota),q(rg[o.cod]||'')].join(';'));
   });
   const b=new Blob(['\uFEFF'+L.join('\r\n')],{type:'text/csv;charset=utf-8'});
@@ -879,11 +898,13 @@ $('bImpRot').addEventListener('click',function(){
   det.open=aberto;
   if(q) renderTabela(q);
 });
-$('bNovo').addEventListener('click',()=>{
+function novoArquivo(){
   $('res').style.display='none'; $('zona').style.display='block';
   $('arq').value=''; $('colarTxt').value=''; aviso('','');
   window.scrollTo(0,0);
-});
+}
+$('bNovo').addEventListener('click',novoArquivo);
+$('bNovoTopo').addEventListener('click',novoArquivo);
 
 /* ============================ APP (PWA) =============================== */
 /* Aberto por file:// o registro falha e nada muda: a ferramenta continua
