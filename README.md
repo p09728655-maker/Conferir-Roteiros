@@ -53,6 +53,7 @@ Depois de instalado o app abre e analisa PDFs sem internet.
 | Arquivo | Papel |
 |---|---|
 | `index.html` | O app inteiro — tela, parser e regras |
+| `logo-patrimar.png` | Logomarca — padrão visual dos apps Patrimar (topo e folha impressa) |
 | `sw.js` | Service worker: cache offline e **versão do app** |
 | `manifest.webmanifest` | Identidade do app instalado (nome, ícone, cores) |
 | `vendor/` | pdf.js local (build legacy, compatível com tablets antigos) |
@@ -75,6 +76,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 | B1 | Quantidade fracionária do item no produto (pela Qtd.Estru do relatório; no formato antigo, inferida pela razão Hrs Total / Hrs Ind.). Sub-peças de lote múltiplo (sufixo .100) são isentas |
 | B2 | Fase fora de ordem crescente dentro do roteiro |
 | B3 | Nº de operação duplicado dentro do item — a chave da sequência da OP fica ambígua |
+| B4 | Nº de operação fora de ordem crescente dentro do item — a OP roda numa sequência diferente da impressa |
 
 ### Atenção — distorce custo ou carga-máquina
 
@@ -164,6 +166,11 @@ de build. Conecte o repositório e publique. O PWA exige HTTPS — a Vercel já 
 
 Parser validado contra o relatório real da PENTEADEIRA PRINCESA BRANCO (114.003.001):
 108 operações e 20 itens lidos, sem falha de leitura.
+
+Descrição comprida não é mais cortada: a coluna Descrição do relatório corta na
+largura (30 caracteres) e o excedente desce para a linha de baixo do PDF — o parser
+emenda a continuação de volta. No cruzamento com a estrutura, a descrição completa
+que vem de lá substitui qualquer resto de corte.
 
 Duas regras foram removidas depois de confrontadas com a convenção real da fábrica —
 geravam falso positivo. Regra que não distingue erro de padrão não deve existir.
