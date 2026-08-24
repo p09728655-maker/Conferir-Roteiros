@@ -375,7 +375,7 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
     <h4>O que ela confere</h4>
     <ul>
       <li><b>Bloqueador</b> — quantidade fracionária do item no produto (B1) e fase fora de ordem crescente no roteiro (B2). Impedem a OP de gerar ou o apontamento de fechar.</li>
-      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação (A5) e operação que não bate com o padrão da máquina (A6). Distorcem custo ou carga-máquina.</li>
+      <li><b>Atenção</b> — operação sem tempo cadastrado (A1), pintura PU (fase 70) sem acabamento UV (fase 75) (A4), tempo muito fora do padrão da operação na mesma máquina (A5) e operação que não bate com o padrão da máquina (A6). Distorcem custo ou carga-máquina.</li>
       <li><b>Informativo</b> — roteiro que não inicia em 010 (I2) e mesma operação distribuída em máquinas diferentes (I3). Padronização de cadastro.</li>
       <li><b>Carga por máquina</b> — soma do tempo do produto por recurso, mostrando onde o tempo está concentrado.</li>
     </ul>
@@ -406,9 +406,11 @@ footer .vs{margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size
 const CFG = {
   exigeFase:[{se:70,entao:75,texto:'pintura PU (fase 70) sem acabamento UV (fase 75)'}],
   tolQtd:0.05,
-  /* A5: Hrs Ind. ≥fator× (ou ≤1/fator) da mediana da mesma operação no
-     produto, exigindo pelo menos `min` ocorrências com tempo para comparar.
-     Fator alto de propósito: variação legítima entre peças não deve apitar. */
+  /* A5: Hrs Ind. ≥fator× (ou ≤1/fator) da mediana da mesma operação NA
+     MESMA MÁQUINA no produto, com pelo menos `min` ocorrências para
+     comparar. Por máquina porque as etapas de um processo (ex.: pintura
+     PU em cabines e lixadeira) dividem o mesmo nome de operação com
+     tempos legitimamente diferentes. Fator alto de propósito. */
   tempoFora:{fator:8, min:3},
   /* A6: operação minoritária numa máquina que executa outra operação como
      padrão no produto (ex.: 1 linha PINTAR PU numa LPT01 que só faz
@@ -480,10 +482,11 @@ function analisar(ops){
   const porItem=new Map(), globais=[];
   for(const o of ops){ if(!porItem.has(o.cod)) porItem.set(o.cod,[]); porItem.get(o.cod).push(o); }
 
-  /* Tempos por operação no produto inteiro — base da regra A5. */
+  /* Tempos por operação+máquina no produto inteiro — base da regra A5. */
   const tempoOp=new Map();
   for(const o of ops){
-    if(o.ind>0){ if(!tempoOp.has(o.op)) tempoOp.set(o.op,[]); tempoOp.get(o.op).push(o.ind); }
+    if(o.ind>0){ const k=o.op+'|'+o.maq;
+      if(!tempoOp.has(k)) tempoOp.set(k,[]); tempoOp.get(k).push(o.ind); }
   }
 
   /* Operações por máquina no produto inteiro — base da regra A6. */
@@ -548,7 +551,7 @@ function analisar(ops){
 
     for(const o of v){
       if(o.ind<=0) continue;
-      const g=tempoOp.get(o.op);
+      const g=tempoOp.get(o.op+'|'+o.maq);
       if(!g||g.length<CFG.tempoFora.min) continue;
       const md=mediana(g); if(!md) continue;
       const raz=o.ind/md;
@@ -556,7 +559,7 @@ function analisar(ops){
         const vezes=Math.round(raz>=1?raz:1/raz), qv=v[0].qtd;
         A('a','A5',o.nr,'Tempo muito fora do padrão da operação',
           o.op+' na '+o.maq+' está com Hrs Ind. de '+hms(o.ind)+' — '+vezes+'× '+
-          (raz>=1?'acima':'abaixo')+' da mediana de "'+o.op+'" neste produto ('+hms(md)+'). '+
+          (raz>=1?'acima':'abaixo')+' da mediana de "'+o.op+'" na '+o.maq+' neste produto ('+hms(md)+'). '+
           'Pode ser erro de digitação no cadastro.'+
           (qv!==null&&qv>1?' O Hrs Total de '+hms(o.tot)+' é este tempo × qtd. '+fmtQtd(qv)+
            ' — a comparação usa o tempo unitário, sem efeito da quantidade.':''),
@@ -607,12 +610,25 @@ function analisar(ops){
      tem relevância no cadastro da Patrimar. Auditar o irrelevante é ruído.
      O dado continua no parse e no CSV, caso volte a importar um dia. */
 
+  /* I3 — só quando itens diferentes usam máquinas diferentes para a mesma
+     operação, sem nunca dividirem o mesmo item. Máquinas que trabalham
+     juntas no MESMO item são etapas do processo (convenção da pintura PU:
+     cabines e lixadeira sob o mesmo nome de operação), não achado. */
   const po=new Map();
-  for(const o of ops){ if(!po.has(o.op)) po.set(o.op,new Set()); po.get(o.op).add(o.maq); }
-  po.forEach(function(s,op){
-    if(s.size<2) return;
+  for(const o of ops){
+    if(!po.has(o.op)) po.set(o.op,{maqs:new Set(),porItem:new Map()});
+    const e=po.get(o.op); e.maqs.add(o.maq);
+    if(!e.porItem.has(o.cod)) e.porItem.set(o.cod,new Set());
+    e.porItem.get(o.cod).add(o.maq);
+  }
+  po.forEach(function(e,op){
+    if(e.maqs.size<2) return;
+    let etapas=false;
+    e.porItem.forEach(function(s){ if(s.size>1) etapas=true; });
+    if(etapas) return;
     globais.push({sev:'i',rg:'I3',ref:op,ti:'Mesma operação em máquinas diferentes',
-      pq:op+' está distribuída em '+Array.from(s).sort().join(', ')+'.',
+      pq:op+' está distribuída em '+Array.from(e.maqs).sort().join(', ')+
+        ' — itens diferentes usam máquinas diferentes, nunca juntas no mesmo item.',
       fz:'Se a substituição for real, cadastrar processo alternativo para não travar o avanço de fase.'});
   });
 
