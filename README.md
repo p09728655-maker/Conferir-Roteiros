@@ -22,15 +22,18 @@ Se o PDF for digitalizado (imagem) o texto não é extraível — use a opção
 
 ### Cruzar com a estrutura (opcional)
 
-Na tela de resultado há uma caixa para soltar um segundo PDF: **Engenharia ›
-Estrutura Sumarizada** do mesmo produto. O cruzamento confere roteiro × estrutura:
+Na tela de resultado há uma caixa para soltar um segundo PDF do mesmo produto —
+**Engenharia › Estrutura Sumarizada** ou, melhor, **Engenharia › Sumarizado Nível
+a Nível** (a hierarquia diz qual material pertence a qual peça e habilita a E5).
+O cruzamento confere roteiro × estrutura:
 
 | Regra | Verificação |
 |---|---|
 | E1 (bloqueador) | Peça fabricada na estrutura **sem roteiro** no relatório de processos — a OP não gera |
 | E2 | Roteiro de peça que a estrutura não produz (roteiro órfão ou estrutura desatualizada) |
 | E3 | Quantidade divergente entre estrutura e roteiro para a mesma peça |
-| E4 | Estrutura consome material de uma família (PU 605, UV 604, fita de borda 609, embalagem 607) e o roteiro não tem a fase correspondente |
+| E4 | Estrutura consome material de uma família (PU 605, UV 604, fita de borda 609, embalagem 607) e o roteiro não tem a fase correspondente (formato Sumarizada, produto inteiro) |
+| E5 | Como a E4, mas **por peça** (formato Nível a Nível): a peça consome o material e o roteiro *dela* não tem a fase — aparece no cartão do item |
 
 O mapeamento família → fase fica em `CFG.estrutura.materialFase`. A Estrutura
 Sumarizada **não traz a fase de consumo do componente** — essa coerência continua
