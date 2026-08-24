@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Auditoria de roteiro de produção do ERP Industrial. Patrimar Móveis — PPCP / Engenharia.">
+<meta name="theme-color" content="#1F2328">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Roteiros">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Conferência de Roteiro — Patrimar</title>
 <style>
 :root{
@@ -35,6 +43,8 @@ main{max-width:1080px;margin:0 auto;padding:24px}
 .btn:focus-visible{outline:2px solid var(--grafite);outline-offset:2px}
 .btn.sec{background:var(--surface);color:var(--texto);border-color:var(--border2)}
 .btn.sec:hover{background:#F0F2F4}
+.btn.ghost{background:transparent;color:#fff;border-color:#4A5058;padding:6px 14px;font-size:13px}
+.btn.ghost:hover{background:#2A2F35;border-color:#6B7280}
 .lk{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;
   text-decoration:underline;cursor:pointer;padding:4px}
 .lk:hover{color:var(--texto)}
@@ -142,6 +152,11 @@ footer h4{font-size:13px;color:var(--texto);margin:0 0 6px}
 footer ul{margin:0 0 14px;padding-left:18px}
 footer li{margin-bottom:3px}
 
+#atualiza{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+  background:var(--grafite);color:#fff;padding:10px 12px 10px 18px;border-radius:8px;
+  gap:14px;align-items:center;box-shadow:0 6px 24px rgba(0,0,0,.28);font-size:14px;z-index:10;
+  max-width:calc(100vw - 24px)}
+
 /* ===================== IMPRESSÃO ===================== */
 .pr{display:none}
 @media print{
@@ -149,7 +164,7 @@ footer li{margin-bottom:3px}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   html,body{background:#fff}
   body{font-size:9.6pt;line-height:1.42}
-  header,#zona,.barraf,details.tb,footer,.btn,.lk{display:none!important}
+  header,#zona,.barraf,details.tb,footer,.btn,.lk,#atualiza{display:none!important}
   main{max-width:none;padding:0;margin:0}
   .pr{display:block}
 
@@ -238,6 +253,7 @@ footer li{margin-bottom:3px}
   <span class="m" aria-hidden="true"></span>
   <h1>Conferência de Roteiro</h1>
   <span class="s">Patrimar Móveis &middot; PPCP / Engenharia</span>
+  <button class="btn ghost" id="bInst" hidden>Instalar app</button>
 </header>
 
 <main>
@@ -334,7 +350,12 @@ footer li{margin-bottom:3px}
   </footer>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<div id="atualiza" role="status" aria-live="polite">
+  <span>Nova versão do app pronta.</span>
+  <button class="btn" id="bAtualizar">Atualizar</button>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
 <script>
 'use strict';
 
@@ -373,8 +394,7 @@ function parseTexto(txt){
 }
 
 async function textoDoPdf(buf){
-  pdfjsLib.GlobalWorkerOptions.workerSrc=
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc='vendor/pdf.worker.min.js';
   const doc=await pdfjsLib.getDocument({data:buf}).promise, out=[];
   for(let p=1;p<=doc.numPages;p++){
     const c=await (await doc.getPage(p)).getTextContent(), ls=[];
@@ -768,6 +788,46 @@ $('bNovo').addEventListener('click',()=>{
   $('arq').value=''; $('colarTxt').value=''; aviso('','');
   window.scrollTo(0,0);
 });
+
+/* ============================ APP (PWA) =============================== */
+/* Aberto por file:// o registro falha e nada muda: a ferramenta continua
+   funcionando como página comum. Publicado, vira app instalável e offline. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      if(reg.waiting&&navigator.serviceWorker.controller) avisarAtualiza(reg);
+      reg.addEventListener('updatefound',function(){
+        const nv=reg.installing; if(!nv) return;
+        nv.addEventListener('statechange',function(){
+          if(nv.state==='installed'&&navigator.serviceWorker.controller) avisarAtualiza(reg);
+        });
+      });
+    }).catch(function(){});
+    /* Só recarrega quando o usuário pediu a atualização — nunca sozinho:
+       no primeiro acesso o claim() do SW também dispara controllerchange. */
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(pediuAtualizar){ pediuAtualizar=false; location.reload(); }
+    });
+  });
+}
+let pediuAtualizar=false;
+function avisarAtualiza(reg){
+  $('atualiza').style.display='flex';
+  $('bAtualizar').onclick=function(){
+    if(reg.waiting){ pediuAtualizar=true; reg.waiting.postMessage('ATIVAR'); }
+  };
+}
+
+let pedidoInstalar=null;
+window.addEventListener('beforeinstallprompt',function(e){
+  e.preventDefault(); pedidoInstalar=e; $('bInst').hidden=false;
+});
+$('bInst').addEventListener('click',function(){
+  if(!pedidoInstalar) return;
+  pedidoInstalar.prompt();
+  pedidoInstalar.userChoice.then(function(){ pedidoInstalar=null; $('bInst').hidden=true; });
+});
+window.addEventListener('appinstalled',function(){ pedidoInstalar=null; $('bInst').hidden=true; });
 </script>
 </body>
 </html>
