@@ -15,6 +15,7 @@ Aberto por duplo clique no `index.html` continua funcionando como página comum.
 1. No Industrial, gere o relatório de processos de produção do produto (todos os níveis) em PDF.
 2. Abra o app e arraste (ou escolha) o PDF na área indicada.
 3. Leia o veredito, corrija item por item, imprima a folha de conferência se for trabalhar na tela do ERP.
+   O roteiro completo também sai no papel, pelo botão **Imprimir roteiro** dentro da tabela.
 
 Se o PDF for digitalizado (imagem) o texto não é extraível — use a opção
 "colar o texto do relatório".
@@ -61,6 +62,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 | A1 | Operação sem tempo cadastrado |
 | A3 | Nº de funcionários divergente para a mesma máquina entre itens |
 | A4 | Item com pintura PU (fase 70) sem acabamento UV (fase 75) |
+| A5 | Hrs Ind. muito fora da mediana da mesma operação no produto (provável erro de digitação) |
 
 ### Informativo — padronização de cadastro
 
@@ -97,6 +99,7 @@ const CFG = {
   exigeFase: [ {se:70, entao:75, texto:'...'} ],  // fase que exige outra fase
   tolQtd: 0.05,            // tolerância para considerar a quantidade inteira
   ignoraFunc: [],          // máquinas isentas da checagem de nº de funcionários
+  tempoFora: {fator:8, min:3}, // A5: ≥8× (ou ≤1/8) da mediana da operação, mín. 3 amostras
   prefixoSemTempo: ['1']   // itens cujo tempo zerado é esperado
 };
 ```
