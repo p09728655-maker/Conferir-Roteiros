@@ -455,7 +455,11 @@ const CFG = {
   /* Prefixos de código cujo tempo zerado é esperado, não falha.
      Na Patrimar o produto acabado (1xx) é cabeçalho de estrutura: o tempo de
      embalagem fica no item de volume (5xx), não no pai. */
-  prefixoSemTempo:['1']
+  prefixoSemTempo:['1'],
+  /* Sub-peças de lote múltiplo (sufixo .100): quantidade fracionária
+     (ex.: 0,5 por produto) é convenção — o lote roda fixado em múltiplo.
+     Confirmado em 24/08/2026. A B1 não aponta esses itens. */
+  sufixoLoteMultiplo:['.100']
 };
 
 /* ====================== PARSE (validado no relatório real) ============
@@ -717,10 +721,12 @@ function analisar(ops){
     const A=(sev,rg,ref,ti,pq,fz)=>ach.push({sev:sev,rg:rg,ref:ref,ti:ti,pq:pq,fz:fz});
 
     /* B1 — com o relatório atual a Qtd.Estru vem impressa e a checagem é
-       exata; no formato antigo, infere pela razão Hrs Total / Hrs Ind. */
+       exata; no formato antigo, infere pela razão Hrs Total / Hrs Ind.
+       Sub-peça de lote múltiplo (sufixo .100) é isenta: fração é o padrão. */
     const qEstru=v[0].qtd;
+    const loteMultiplo=CFG.sufixoLoteMultiplo.some(s=>cod.slice(-s.length)===s);
     const q=(qEstru!==null)?qEstru:mediana(v.filter(o=>o.ind>0).map(o=>o.tot/o.ind));
-    if(q!==null){
+    if(q!==null&&!loteMultiplo){
       const frac=Math.abs(q-Math.round(q));
       if(frac>CFG.tolQtd){
         const den=Math.round(1/frac);

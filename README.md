@@ -72,7 +72,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 
 | Regra | Verificação |
 |---|---|
-| B1 | Quantidade fracionária do item no produto (pela Qtd.Estru do relatório; no formato antigo, inferida pela razão Hrs Total / Hrs Ind.) |
+| B1 | Quantidade fracionária do item no produto (pela Qtd.Estru do relatório; no formato antigo, inferida pela razão Hrs Total / Hrs Ind.). Sub-peças de lote múltiplo (sufixo .100) são isentas |
 | B2 | Fase fora de ordem crescente dentro do roteiro |
 | B3 | Nº de operação duplicado dentro do item — a chave da sequência da OP fica ambígua |
 
@@ -127,6 +127,7 @@ do ERP evoluir — não é preciso mexer no resto do código.
 const CFG = {
   exigeFase: [ {se:70, entao:75, texto:'...'} ],  // fase que exige outra fase
   tolQtd: 0.05,            // tolerância para considerar a quantidade inteira
+  sufixoLoteMultiplo: ['.100'], // sub-peças de lote múltiplo: fração de qtd é convenção, B1 não aponta
   tempoFora: {fator:8, min:3}, // A5: ≥8× (ou ≤1/8) da mediana da operação, mín. 3 amostras
   opMaquina: {minPadrao:3, fator:3}, // A6: dominante ≥3 ocorrências e ≥3× a minoritária
   opFase:    {minPadrao:3, fator:3}, // A7: mesma lógica, para a fase da operação
@@ -145,6 +146,10 @@ Por isso não existe regra de operação repetida.
 diferentes da mesma linha (cabines, lixadeira) sob o mesmo nome de operação, com tempos
 legitimamente diferentes. Por isso a A5 compara por operação **e** máquina, e o I3 ignora
 operações cujas máquinas trabalham juntas dentro do mesmo item.
+
+**Sub-peças de lote múltiplo (sufixo .100)** — quantidade fracionária (ex.: 0,5 por
+produto) é o cadastro correto: o lote dessas peças roda fixado em múltiplo. A B1 não
+as aponta (confirmado em 24/08/2026).
 
 ---
 
