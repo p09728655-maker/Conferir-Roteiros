@@ -14,7 +14,7 @@
 <title>Conferência de Roteiro — Patrimar</title>
 <style>
 :root{
-  --vermelho:#DB2126; --bordeaux:#A8140F; --grafite:#1F2328;
+  --vermelho:#DB2126; --bordeaux:#A8140F; --grafite:#1F2328; --areia:#F7ECC0;
   --bloq:#C2410C; --bloq-bg:#FFF3EC; --bloq-bd:#F5D5C2;
   --aten:#A16207; --aten-bg:#FDF8E7; --aten-bd:#EEE0B0;
   --info:#475569; --info-bg:#F1F5F9; --info-bd:#DBE2EA;
@@ -88,8 +88,8 @@ h3.sc{font-size:12px;font-weight:700;letter-spacing:.7px;text-transform:uppercas
   align-items:baseline;flex-wrap:wrap;background:#FCFDFD}
 .item>.h .cod{font-family:ui-monospace,Consolas,monospace;font-weight:700;font-size:15px}
 .item>.h .ds{color:var(--muted);font-size:13px}
-.item>.h .qt{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted);
-  background:#F0F2F4;padding:1px 7px;border-radius:3px;white-space:nowrap}
+.item>.h .qt{font-family:ui-monospace,Consolas,monospace;font-size:14px;font-weight:700;
+  color:var(--texto);background:var(--areia);padding:2px 10px;border-radius:3px;white-space:nowrap}
 .item>.h .bd{margin-left:auto;display:flex;gap:5px}
 .tag{font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:3px;white-space:nowrap}
 .tag.b{background:var(--bloq-bg);color:var(--bloq);border:1px solid var(--bloq-bd)}
@@ -104,6 +104,9 @@ h3.sc{font-size:12px;font-weight:700;letter-spacing:.7px;text-transform:uppercas
 .rot tr.hit td{color:var(--bloq);font-weight:600}
 .rot .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
   font-weight:600;margin-bottom:4px}
+.rot .lbl b{color:var(--texto);font-size:12px}
+.rot tr.cb td{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);
+  font-weight:600;border-bottom:1px solid var(--border);padding-bottom:2px}
 
 .ach{padding:12px 18px;border-bottom:1px solid var(--border)}
 .ach:last-child{border-bottom:none}
@@ -150,7 +153,7 @@ table.full td.nt{color:var(--muted);font-size:12px;white-space:normal}
 table.full tr.grp td{background:#F0F2F4;border-top:2px solid var(--border2);
   padding:7px 10px;white-space:normal;font-size:12.5px}
 table.full tr.grp .gc{font-family:ui-monospace,Consolas,monospace;font-weight:700;margin-right:8px}
-table.full tr.grp .gn{float:right;color:var(--muted);font-size:11px}
+table.full tr.grp .gn{float:right;color:var(--texto);font-size:12.5px;font-weight:600}
 
 footer{max-width:1080px;margin:28px auto 0;padding:20px 24px;border-top:1px solid var(--border);
   font-size:13px;color:var(--muted)}
@@ -550,11 +553,13 @@ function analisar(ops){
       const md=mediana(g); if(!md) continue;
       const raz=o.ind/md;
       if(raz>=CFG.tempoFora.fator||raz<=1/CFG.tempoFora.fator){
-        const vezes=Math.round(raz>=1?raz:1/raz);
+        const vezes=Math.round(raz>=1?raz:1/raz), qv=v[0].qtd;
         A('a','A5',o.nr,'Tempo muito fora do padrão da operação',
           o.op+' na '+o.maq+' está com Hrs Ind. de '+hms(o.ind)+' — '+vezes+'× '+
           (raz>=1?'acima':'abaixo')+' da mediana de "'+o.op+'" neste produto ('+hms(md)+'). '+
-          'Pode ser erro de digitação no cadastro.',
+          'Pode ser erro de digitação no cadastro.'+
+          (qv!==null&&qv>1?' O Hrs Total de '+hms(o.tot)+' é este tempo × qtd. '+fmtQtd(qv)+
+           ' — a comparação usa o tempo unitário, sem efeito da quantidade.':''),
           'Confirmar o tempo real (cronometragem ou histórico) e corrigir. '+
           'Se a diferença for legítima desta máquina ou peça, manter.');
       }
@@ -720,7 +725,11 @@ function renderLista(){
       });
       const sevs=[];
       lista.forEach(function(a){ if(sevs.indexOf(a.sev)<0) sevs.push(a.sev); });
-      const rot='<div class="rot"><div class="lbl">Roteiro do item</div><table>'+
+      const rot='<div class="rot"><div class="lbl">Roteiro do item'+
+        (it.qtd!==null&&it.qtd>1?' &nbsp;·&nbsp; <b>Hrs Total = Hrs Ind. × '+fmtQtd(it.qtd)+'</b>':'')+
+        '</div><table>'+
+        '<tr class="cb"><td>Nr.</td><td>Operação</td><td>Fase</td><td>Máq.</td>'+
+        '<td class="n">Hrs Ind.</td><td class="n">Hrs Total</td><td></td></tr>'+
         it.ops.map(function(o){
           return '<tr class="'+(refs[o.nr]?'hit':'')+'">'+
             '<td class="k">'+esc(o.nr)+'</td><td>'+esc(o.op)+'</td>'+
