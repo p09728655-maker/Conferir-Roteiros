@@ -459,10 +459,12 @@ const CFG = {
 };
 
 /* ====================== PARSE (validado no relatório real) ============
-   Dois formatos do Industrial: o antigo, sem quantidade, e o atual, com a
-   coluna Qtd.Estru (ex.: "2,0000") entre a descrição e o nº da operação.
-   O grupo da quantidade é opcional — o mesmo regex lê os dois. */
-const RX=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.+?) (?:(\d[\d.]*,\d+) )?(\d{3}) (.+?) (\d{2,3}) (\S+) (\d+) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2})$/;
+   Dois formatos do Industrial: o atual tem a coluna Qtd.Estru entre a
+   descrição e o nº da operação; o antigo não tem. Tenta PRIMEIRO o formato
+   com quantidade — o Nr ancorado logo depois da Qtd.Estru impede que uma
+   descrição terminada em número ("LAT I DIR 361...") seja lida como Nr. */
+const RXQ=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.+?) (\d[\d.]*,\d+) (\d{3}) (.+?) (\d{2,3}) (\S+) (\d+) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2})$/;
+const RXS=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.+?) (\d{3}) (.+?) (\d{2,3}) (\S+) (\d+) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2}) (\d{2}:\d{2}:\d{2})$/;
 const seg=t=>{const p=t.split(':').map(Number);return p[0]*3600+p[1]*60+p[2];};
 function hms(s){s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;
   return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');}
@@ -472,11 +474,12 @@ function parseTexto(txt){
   const ops=[];
   for(const bruta of txt.split(/\r?\n/)){
     const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
-    const m=RX.exec(l);
-    if(m){ops.push({niv:+m[1],cod:m[2],desc:m[3].trim(),
-      qtd:m[4]?parseFloat(m[4].replace(/\./g,'').replace(',','.')):null,
-      nr:m[5],op:m[6].trim(),
-      fase:+m[7],maq:m[8],func:+m[9],ind:seg(m[10]),tot:seg(m[11]),nota:''});}
+    let m=RXQ.exec(l), d=0, qtd=null;
+    if(m){ qtd=parseFloat(m[4].replace(/\./g,'').replace(',','.')); d=1; }
+    else m=RXS.exec(l);
+    if(m){ops.push({niv:+m[1],cod:m[2],desc:m[3].trim(),qtd:qtd,
+      nr:m[4+d],op:m[5+d].trim(),
+      fase:+m[6+d],maq:m[7+d],func:+m[8+d],ind:seg(m[9+d]),tot:seg(m[10+d]),nota:''});}
     else if(ops.length&&l.indexOf('Informação p/ OF')>=0){
       const n=l.split('Informação p/ OF')[1].trim();
       if(n) ops[ops.length-1].nota=n;
@@ -799,6 +802,9 @@ function analisar(ops){
       m.forEach(function(n,op){ if(n>domN){domN=n; domOp=op;} });
       const meuN=m.get(o.op);
       if(domOp===o.op) continue;
+      /* Variante do mesmo nome não é troca: "CORTAR (VOLTA DA COLADEIRA)"
+         na máquina cujo padrão é CORTAR é a mesma operação com sufixo. */
+      if(o.op.indexOf(domOp)===0||domOp.indexOf(o.op)===0) continue;
       if(domN>=CFG.opMaquina.minPadrao && domN>=CFG.opMaquina.fator*meuN){
         a6Nrs.add(o.nr);
         A('a','A6',o.nr,'Operação não bate com o padrão da máquina',
