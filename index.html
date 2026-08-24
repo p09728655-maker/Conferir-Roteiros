@@ -439,13 +439,17 @@ const CFG = {
   opFase:{minPadrao:3, fator:3},
   /* Cruzamento com o relatório Estrutura Sumarizada (2º PDF, opcional). */
   estrutura:{
-    prefixoPeca:['4','5'],   // peças fabricadas: precisam de roteiro (E1/E2/E3)
+    /* Peça fabricada = código presente no relatório de processos (o roteiro
+       é a fonte); os prefixos são só a reserva para a E1 (peça que ficou
+       SEM roteiro precisa ser reconhecida de algum jeito). */
+    prefixoPeca:['4','5'],
+    prefixoVolume:['5'],     // itens que só embalam: não respondem por pintura/borda
     tolQtdDiv:0.001,
     materialFase:[            // família de material → fase que o roteiro precisa ter
       {prefixo:'605', fase:70, texto:'insumo de pintura PU (605.*)'},
       {prefixo:'604', fase:75, texto:'material de acabamento UV (604.*)'},
       {prefixo:'609', fase:65, texto:'fita de borda (609.*)'},
-      {prefixo:'607', fase:85, texto:'material de embalagem (607.*)'}
+      {prefixo:'607', fase:85, texto:'material de embalagem (607.*)', volume:true}
     ]
   },
   /* Prefixos de código cujo tempo zerado é esperado, não falha.
@@ -539,8 +543,10 @@ function parseEstruturaSumarizada(txt){
 
 const RXN=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.*?)\s*(\d[\d.]*,\d+) (\S{1,4}) (\d[\d.]*,\d+)/;
 function parseEstruturaNivel(txt){
-  const r={pai:null, formato:'nivel', mats:[], pecas:[]};
-  const pilha=[]; let ultimo=null;
+  /* Só coleta as linhas na ordem; a classificação peça × material acontece
+     no cruzamento, quando o roteiro já é conhecido. */
+  const r={pai:null, formato:'nivel', linhas:[], mats:[], pecas:[]};
+  let ultimo=null;
   for(const bruta of txt.split(/\r?\n/)){
     const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
     const p=/Produto\s*(?:Pai)?\s*:\s*(\d{3}\.\d{3}\.\d{3})/.exec(l);
@@ -553,29 +559,40 @@ function parseEstruturaNivel(txt){
       }
       continue;
     }
-    const niv=+m[1], cod=m[2], desc=m[3].trim(),
-      qtd=parseFloat(m[4].replace(/\./g,'').replace(',','.'));
-    while(pilha.length&&pilha[pilha.length-1].niv>=niv) pilha.pop();
-    if(pecaFabricada(cod)){
-      r.pecas.push(ultimo={cod:cod,desc:desc,qtd:qtd});
-      pilha.push({niv:niv,cod:cod,peca:true});
-    }else{
-      /* material pertence à peça fabricada mais próxima acima na pilha */
-      let dona=null;
-      for(let i=pilha.length-1;i>=0;i--) if(pilha[i].peca){dona=pilha[i].cod;break;}
-      r.mats.push(ultimo={cod:cod,desc:desc,qtd:qtd,peca:dona});
-      pilha.push({niv:niv,cod:cod,peca:false});
-    }
+    r.linhas.push(ultimo={niv:+m[1], cod:m[2], desc:m[3].trim(),
+      qtd:parseFloat(m[4].replace(/\./g,'').replace(',','.'))});
   }
   return r;
 }
 
+/* Classifica as linhas do Nível a Nível em peças e materiais.
+   Peça = código que TEM roteiro no relatório de processos (a fonte da
+   verdade, independe de prefixo) ou, na falta dele, prefixo de peça —
+   assim a E1 ainda enxerga peça da estrutura que ficou sem roteiro. */
+function classificarNivel(est, temRot){
+  est.pecas=[]; est.mats=[];
+  const pilha=[];
+  for(const e of (est.linhas||[])){
+    while(pilha.length&&pilha[pilha.length-1].niv>=e.niv) pilha.pop();
+    if(temRot.has(e.cod)||pecaFabricada(e.cod)){
+      est.pecas.push(e);
+      pilha.push({niv:e.niv,cod:e.cod,peca:true});
+    }else{
+      let dona=null;
+      for(let i=pilha.length-1;i>=0;i--) if(pilha[i].peca){dona=pilha[i].cod;break;}
+      e.peca=dona; est.mats.push(e);
+      pilha.push({niv:e.niv,cod:e.cod,peca:false});
+    }
+  }
+}
+
 function achadosEstrutura(est, itens, raizCod){
   const CE=CFG.estrutura, achs=[], porItem={};
-  const fabricada=pecaFabricada;
   const temRot=new Set(itens.map(i=>i.cod));
   const qtdRot=new Map(); itens.forEach(i=>qtdRot.set(i.cod,i.qtd));
   const fases=new Set(); itens.forEach(i=>i.ops.forEach(o=>fases.add(o.fase)));
+  const fabricada=c=>temRot.has(c)||pecaFabricada(c);
+  if(est.formato==='nivel') classificarNivel(est, temRot);
 
   for(const p of est.pecas){
     if(!fabricada(p.cod)) continue;
@@ -615,11 +632,26 @@ function achadosEstrutura(est, itens, raizCod){
       if(!matsPorPeca.has(m.peca)) matsPorPeca.set(m.peca,[]);
       matsPorPeca.get(m.peca).push(m);
     });
+    const ehVolume=c=>CE.prefixoVolume.some(p=>c.indexOf(p)===0);
+    const globalJa=new Set();
     for(const i of itens){
       const ms=matsPorPeca.get(i.cod); if(!ms) continue;
       const fasesItem=new Set(i.ops.map(o=>o.fase));
       for(const mf of CE.materialFase){
         if(!ms.some(m=>m.cod.indexOf(mf.prefixo)===0)) continue;
+        if(ehVolume(i.cod)&&!mf.volume){
+          /* Volume só embala. Tinta/fita pendurada nele é agregado da
+             estrutura — a checagem vale para o produto inteiro. */
+          if(!fases.has(mf.fase)&&!globalJa.has(mf.prefixo)){
+            globalJa.add(mf.prefixo);
+            achs.push({sev:'a',rg:'E4',ref:mf.prefixo+'.*',
+              ti:'Material sem a fase correspondente no roteiro',
+              pq:'A estrutura consome '+mf.texto+', mas nenhum item do roteiro tem a fase '+mf.fase+'. '+
+                'O roteiro está provavelmente incompleto.',
+              fz:'Incluir no roteiro a operação da fase '+mf.fase+', ou revisar o consumo na estrutura.'});
+          }
+          continue;
+        }
         if(!fasesItem.has(mf.fase)){
           (porItem[i.cod]=porItem[i.cod]||[]).push({sev:'a',rg:'E5',ref:'',
             ti:'Material da peça sem a fase no roteiro',
@@ -1107,8 +1139,9 @@ async function lerEstrutura(file){
 }
 function aplicarEstrutura(est){
   const raiz=E.ops.find(o=>o.niv===0)||E.ops[0];
-  if(!est.pecas.length&&!est.mats.length){
-    $('estStatus').innerHTML='<span class="err">Não parece o relatório "Estrutura Sumarizada" — nenhum material lido.</span>';
+  const vazia = est.formato==='nivel' ? !est.linhas.length : (!est.pecas.length&&!est.mats.length);
+  if(vazia){
+    $('estStatus').innerHTML='<span class="err">Não parece um relatório de estrutura — nenhum material lido.</span>';
     return;
   }
   if(est.pai&&raiz&&est.pai!==raiz.cod){
