@@ -504,19 +504,29 @@ async function textoDoPdf(buf){
   return out.join('\n');
 }
 
-/* ==================== ESTRUTURA (2º PDF, opcional) ==================== */
-const RXE=/^(\d{3}\.\d{3}\.\d{3}) (.*?)\s*(\d[\d.]*,\d+) (\S{1,4}) /;
+/* ==================== ESTRUTURA (2º PDF, opcional) ====================
+   Dois relatórios servem: "Estrutura Sumarizada" (materiais achatados +
+   seção Peças/Componentes) e "Sumarizado Nível a Nível" (hierarquia que
+   diz qual material pertence a qual peça — permite a checagem E5). */
+const pecaFabricada=c=>CFG.estrutura.prefixoPeca.some(p=>c.indexOf(p)===0);
+
 function parseEstrutura(txt){
-  const r={pai:null, mats:[], pecas:[]};
+  return txt.indexOf('Sumarizado Nível a Nível')>=0
+    ? parseEstruturaNivel(txt) : parseEstruturaSumarizada(txt);
+}
+
+const RXE=/^(\d{3}\.\d{3}\.\d{3}) (.*?)\s*(\d[\d.]*,\d+) (\S{1,4}) /;
+function parseEstruturaSumarizada(txt){
+  const r={pai:null, formato:'sumarizada', mats:[], pecas:[]};
   let secPecas=false, ultimo=null;
   for(const bruta of txt.split(/\r?\n/)){
     const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
-    const p=/Produto Pai:\s*(\d{3}\.\d{3}\.\d{3})/.exec(l);
+    const p=/Produto\s*(?:Pai)?\s*:\s*(\d{3}\.\d{3}\.\d{3})/.exec(l);
     if(p){ r.pai=p[1]; continue; }
     if(l.indexOf('Peças / Componentes')>=0){ secPecas=true; ultimo=null; continue; }
     const m=RXE.exec(l);
     if(m){
-      ultimo={cod:m[1],desc:m[2].trim(),qtd:parseFloat(m[3].replace(/\./g,'').replace(',','.'))};
+      ultimo={cod:m[1],desc:m[2].trim(),qtd:parseFloat(m[3].replace(/\./g,'').replace(',','.')),peca:null};
       (secPecas?r.pecas:r.mats).push(ultimo);
     } else if(ultimo&&!ultimo.desc&&!/[:%]/.test(l)&&
       !/^(Material|Peças|Totais|Núm\.|Vers|Página|PATRIMAR|CNPJ|Engenharia|Estrutura)/.test(l)){
@@ -527,9 +537,42 @@ function parseEstrutura(txt){
   return r;
 }
 
+const RXN=/^(\d+) (\d{3}\.\d{3}\.\d{3}) (.*?)\s*(\d[\d.]*,\d+) (\S{1,4}) (\d[\d.]*,\d+)/;
+function parseEstruturaNivel(txt){
+  const r={pai:null, formato:'nivel', mats:[], pecas:[]};
+  const pilha=[]; let ultimo=null;
+  for(const bruta of txt.split(/\r?\n/)){
+    const l=bruta.replace(/\s+/g,' ').trim(); if(!l) continue;
+    const p=/Produto\s*(?:Pai)?\s*:\s*(\d{3}\.\d{3}\.\d{3})/.exec(l);
+    if(p){ r.pai=p[1]; continue; }
+    const m=RXN.exec(l);
+    if(!m){
+      if(ultimo&&!ultimo.desc&&!/[:%]/.test(l)&&!/^\d/.test(l)&&
+        !/^(Nível|Valor|PATRIMAR|CNPJ|Engenharia|Página|Lógica|Data|Hora|Sumarizado)/.test(l)){
+        ultimo.desc=l; ultimo=null;
+      }
+      continue;
+    }
+    const niv=+m[1], cod=m[2], desc=m[3].trim(),
+      qtd=parseFloat(m[4].replace(/\./g,'').replace(',','.'));
+    while(pilha.length&&pilha[pilha.length-1].niv>=niv) pilha.pop();
+    if(pecaFabricada(cod)){
+      r.pecas.push(ultimo={cod:cod,desc:desc,qtd:qtd});
+      pilha.push({niv:niv,cod:cod,peca:true});
+    }else{
+      /* material pertence à peça fabricada mais próxima acima na pilha */
+      let dona=null;
+      for(let i=pilha.length-1;i>=0;i--) if(pilha[i].peca){dona=pilha[i].cod;break;}
+      r.mats.push(ultimo={cod:cod,desc:desc,qtd:qtd,peca:dona});
+      pilha.push({niv:niv,cod:cod,peca:false});
+    }
+  }
+  return r;
+}
+
 function achadosEstrutura(est, itens, raizCod){
-  const CE=CFG.estrutura, achs=[];
-  const fabricada=c=>CE.prefixoPeca.some(p=>c.indexOf(p)===0);
+  const CE=CFG.estrutura, achs=[], porItem={};
+  const fabricada=pecaFabricada;
   const temRot=new Set(itens.map(i=>i.cod));
   const qtdRot=new Map(); itens.forEach(i=>qtdRot.set(i.cod,i.qtd));
   const fases=new Set(); itens.forEach(i=>i.ops.forEach(o=>fases.add(o.fase)));
@@ -563,16 +606,42 @@ function achadosEstrutura(est, itens, raizCod){
     }
   }
 
-  for(const mf of CE.materialFase){
-    if(!est.mats.some(m=>m.cod.indexOf(mf.prefixo)===0)) continue;
-    if(!fases.has(mf.fase)){
-      achs.push({sev:'a',rg:'E4',ref:mf.prefixo+'.*',ti:'Material sem a fase correspondente no roteiro',
-        pq:'A estrutura consome '+mf.texto+', mas nenhum item do roteiro tem a fase '+mf.fase+'. '+
-          'O roteiro está provavelmente incompleto — a baixa do material e o apontamento da fase ficam sem onde acontecer.',
-        fz:'Incluir no roteiro a operação da fase '+mf.fase+', ou revisar o consumo na estrutura.'});
+  if(est.formato==='nivel'){
+    /* E5 — material × fase POR PEÇA: a hierarquia diz o que cada peça
+       consome, então a fase precisa existir no roteiro DELA. */
+    const matsPorPeca=new Map();
+    est.mats.forEach(function(m){
+      if(!m.peca) return;
+      if(!matsPorPeca.has(m.peca)) matsPorPeca.set(m.peca,[]);
+      matsPorPeca.get(m.peca).push(m);
+    });
+    for(const i of itens){
+      const ms=matsPorPeca.get(i.cod); if(!ms) continue;
+      const fasesItem=new Set(i.ops.map(o=>o.fase));
+      for(const mf of CE.materialFase){
+        if(!ms.some(m=>m.cod.indexOf(mf.prefixo)===0)) continue;
+        if(!fasesItem.has(mf.fase)){
+          (porItem[i.cod]=porItem[i.cod]||[]).push({sev:'a',rg:'E5',ref:'',
+            ti:'Material da peça sem a fase no roteiro',
+            pq:'A estrutura consome '+mf.texto+' nesta peça, mas o roteiro dela não tem a fase '+
+              mf.fase+'. A baixa do material e o apontamento ficam sem onde acontecer.',
+            fz:'Incluir a operação da fase '+mf.fase+' no roteiro da peça, ou revisar o consumo na estrutura.'});
+        }
+      }
+    }
+  } else {
+    /* E4 — sem hierarquia, a checagem material × fase é no produto inteiro. */
+    for(const mf of CE.materialFase){
+      if(!est.mats.some(m=>m.cod.indexOf(mf.prefixo)===0)) continue;
+      if(!fases.has(mf.fase)){
+        achs.push({sev:'a',rg:'E4',ref:mf.prefixo+'.*',ti:'Material sem a fase correspondente no roteiro',
+          pq:'A estrutura consome '+mf.texto+', mas nenhum item do roteiro tem a fase '+mf.fase+'. '+
+            'O roteiro está provavelmente incompleto — a baixa do material e o apontamento da fase ficam sem onde acontecer.',
+          fz:'Incluir no roteiro a operação da fase '+mf.fase+', ou revisar o consumo na estrutura.'});
+      }
     }
   }
-  return achs;
+  return {globais:achs, porItem:porItem};
 }
 
 /* ============================ REGRAS ================================== */
@@ -1047,16 +1116,29 @@ function aplicarEstrutura(est){
       '). Carregue a estrutura de '+esc(raiz.cod)+'.</span>';
     return;
   }
-  /* recruzar substitui os achados E anteriores */
-  E.globais=E.globais.filter(a=>String(a.rg).indexOf('E')!==0);
-  const achs=achadosEstrutura(est, E.itens, raiz?raiz.cod:null);
+  /* recruzar substitui os achados E anteriores, nos globais e nos itens */
+  const ehE=a=>String(a.rg).indexOf('E')===0;
+  E.globais=E.globais.filter(a=>!ehE(a));
+  E.itens.forEach(function(i){ i.ach=i.ach.filter(a=>!ehE(a)); });
+  const res=achadosEstrutura(est, E.itens, raiz?raiz.cod:null);
   const peso={b:0,a:1,i:2};
-  E.globais=E.globais.concat(achs).sort((x,y)=>peso[x.sev]-peso[y.sev]);
+  E.globais=E.globais.concat(res.globais).sort((x,y)=>peso[x.sev]-peso[y.sev]);
+  let nosItens=0;
+  E.itens.forEach(function(i){
+    const xs=res.porItem[i.cod];
+    if(xs){ i.ach=i.ach.concat(xs); nosItens+=xs.length; }
+    i.ach.sort((x,y)=>peso[x.sev]-peso[y.sev]);
+    i.pior=i.ach.length?i.ach[0].sev:null;
+  });
+  E.itens.sort((a,b)=>
+    (a.pior?peso[a.pior]:3)-(b.pior?peso[b.pior]:3) || a.cod.localeCompare(b.cod));
   atualizarContagens(); renderVeredito(); renderLista(); renderImpressao();
-  $('estStatus').innerHTML='<b>Estrutura cruzada</b> — '+
+  const total=res.globais.length+nosItens;
+  $('estStatus').innerHTML='<b>Estrutura cruzada</b>'+
+    (est.formato==='nivel'?' (nível a nível)':'')+' — '+
     est.pecas.length+' peça'+(est.pecas.length===1?'':'s')+' e '+
-    est.mats.length+(est.mats.length===1?' material conferido':' materiais conferidos')+': '+(achs.length
-      ? achs.length+' achado'+(achs.length>1?'s':'')+' (ver observações gerais).'
+    est.mats.length+(est.mats.length===1?' material conferido':' materiais conferidos')+': '+(total
+      ? total+' achado'+(total>1?'s':'')+'.'
       : 'nenhuma divergência.');
 }
 const estBox=$('estBox');
