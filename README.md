@@ -52,7 +52,7 @@ invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
 
 | Regra | Verificação |
 |---|---|
-| B1 | Quantidade fracionária do item no produto (Hrs Total < Hrs Ind.) |
+| B1 | Quantidade fracionária do item no produto (pela Qtd.Estru do relatório; no formato antigo, inferida pela razão Hrs Total / Hrs Ind.) |
 | B2 | Fase fora de ordem crescente dentro do roteiro |
 
 ### Atenção — distorce custo ou carga-máquina
@@ -78,7 +78,9 @@ onde está concentrado o tempo — não a capacidade disponível.
 
 ## O que ela NÃO verifica
 
-- **Consumo de material e quantidades de estrutura.** O relatório de processos não traz esses dados.
+- **Consumo de material.** O relatório de processos não traz esse dado. A quantidade de
+  estrutura (Qtd.Estru) passou a vir no relatório atual: é exibida por item e conferida
+  pela B1. O parser lê os dois formatos — com e sem a coluna.
 - **Coerência entre a fase do componente e a fase do roteiro.** Mesmo motivo. É a origem
   de boa parte dos erros reais de cadastro e continua exigindo conferência na tela.
 - **Marcação de fim de fase.** Não consta no relatório.
