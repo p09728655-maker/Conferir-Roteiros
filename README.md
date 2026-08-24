@@ -1,22 +1,47 @@
 # Conferência de Roteiro — Patrimar Móveis
 
-Ferramenta de auditoria de roteiro de produção do ERP Industrial. Lê o relatório
+App de auditoria de roteiro de produção do ERP Industrial. Lê o relatório
 **Engenharia › Processos de Produção (Todos os Níveis)** em PDF e aponta
 inconsistências de cadastro, agrupadas por item, com a ação recomendada para cada uma.
 
-HTML único, sem build, sem dependência de servidor. Abre com duplo clique ou publica
-na Vercel como está.
+É um **PWA**: publicado na Vercel, instala no celular, tablet ou desktop com ícone
+próprio e funciona **offline** — o pdf.js está no repositório (`vendor/`), sem CDN.
+Aberto por duplo clique no `index.html` continua funcionando como página comum.
 
 ---
 
 ## Uso
 
 1. No Industrial, gere o relatório de processos de produção do produto (todos os níveis) em PDF.
-2. Abra `index.html` e arraste o PDF para a área indicada.
+2. Abra o app e arraste (ou escolha) o PDF na área indicada.
 3. Leia o veredito, corrija item por item, imprima a folha de conferência se for trabalhar na tela do ERP.
 
 Se o PDF for digitalizado (imagem) o texto não é extraível — use a opção
 "colar o texto do relatório".
+
+### Instalar como app
+
+- **Android / Chrome / Edge** — abra o endereço publicado e toque em **Instalar app**
+  no cabeçalho (ou menu do navegador › "Instalar aplicativo").
+- **iPhone / iPad (Safari)** — Compartilhar › **Adicionar à Tela de Início**.
+
+Depois de instalado o app abre e analisa PDFs sem internet.
+
+### Estrutura
+
+| Arquivo | Papel |
+|---|---|
+| `index.html` | O app inteiro — tela, parser e regras |
+| `sw.js` | Service worker: cache offline e **versão do app** |
+| `manifest.webmanifest` | Identidade do app instalado (nome, ícone, cores) |
+| `vendor/` | pdf.js local (build legacy, compatível com tablets antigos) |
+| `icons/` | Ícones do app |
+
+### Publicar uma atualização
+
+Toda mudança publicada exige **incrementar `VERSAO` no topo do `sw.js`** — é ela que
+invalida o cache. No próximo acesso o app baixa a versão nova e mostra o aviso
+"Nova versão do app pronta › Atualizar"; a troca só acontece quando o usuário aceita.
 
 ---
 
@@ -88,7 +113,7 @@ Por isso não existe regra de operação repetida.
 ## Publicar na Vercel
 
 Site estático com `index.html` na raiz. Não precisa de `vercel.json` nem de configuração
-de build. Conecte o repositório e publique.
+de build. Conecte o repositório e publique. O PWA exige HTTPS — a Vercel já entrega.
 
 ---
 
