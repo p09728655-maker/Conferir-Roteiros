@@ -766,8 +766,8 @@ function renderLista(){
   if(limpos.length && f==='todos'){
     alvo.insertAdjacentHTML('beforeend',
       '<h3 class="sc">Sem achados ('+limpos.length+')</h3>'+
-      '<div class="limpos"><b>'+limpos.length+' item'+(limpos.length>1?'s':'')+
-      ' passou'+(limpos.length>1?'ram':'')+' em todas as regras.</b>'+
+      '<div class="limpos"><b>'+limpos.length+
+      (limpos.length>1?' itens passaram':' item passou')+' em todas as regras.</b>'+
       '<div class="ls">'+limpos.map(i=>esc(i.cod)).join(' &nbsp;·&nbsp; ')+'</div></div>');
   }
 
